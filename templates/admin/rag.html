@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block title %}RAG Chunks - Hostay{% endblock %}
+{% block page_title %}📚 Gestion des Chunks RAG{% endblock %}
+
+{% block content %}
+
+<div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; padding: 2rem; border-radius: 16px; margin-bottom: 2rem; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); display: flex; align-items: center; gap: 1.5rem;">
+    <div style="width: 64px; height: 64px; background: rgba(255,255,255,0.2); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 2rem;">
+        <i class="ri-database-2-line"></i>
+    </div>
+    <div>
+        <div style="font-size: 2.5rem; font-weight: 700; line-height: 1;">{{ chunks | length }}</div>
+        <div style="opacity: 0.9; font-size: 1.1rem;">Chunks dans la base de connaissances</div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+    
+    <!-- Upload Document Card -->
+    <div style="background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem;">
+            <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                <i class="ri-upload-cloud-2-line"></i>
+            </div>
+            <div>
+                <h3 style="font-size: 1.25rem; font-weight: 600; color: #1e293b; margin: 0;">Upload Document</h3>
+                <p style="color: #64748b; font-size: 0.9rem; margin: 4px 0 0 0;">.txt, .md, .pdf ou .doc/.docx</p>
+            </div>
+        </div>
+        <form id="uploadForm" action="/admin/rag/upload" method="POST" enctype="multipart/form-data" onsubmit="return false;">
+            <div style="margin-bottom: 1rem;">
+                <label for="fileInput" style="display: block; color: #475569; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">Sélectionner un fichier</label>
+                <input type="file" id="fileInput" name="file" accept=".txt,.md,.pdf,.doc,.docx"
+                    style="width: 100%; padding: 0.875rem; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 0.95rem; cursor: pointer; background: #f8fafc;">
+                <div id="fileName" style="color: #64748b; font-size: 0.85rem; margin-top: 0.5rem;">Aucun fichier sélectionné</div>
+            </div>
+            <button type="button" id="uploadBtn"
+                style="width: 100%; padding: 1rem; background: linear-gradient(135deg, #10b981, #059669); border: none; border-radius: 12px; color: white; font-weight: 600; cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3); font-size: 1rem; opacity: 0.5;">
+                <i class="ri-file-upload-line"></i> Upload & Auto-Chunk
+            </button>
+        </form>
+    </div>
+
+    <!-- Ajouter Chunk Manuel Card -->
+    <div style="background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem;">
+            <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem;">
+                <i class="ri-add-circle-line"></i>
+            </div>
+            <div>
+                <h3 style="font-size: 1.25rem; font-weight: 600; color: #1e293b; margin: 0;">Ajout Manuel</h3>
+                <p style="color: #64748b; font-size: 0.9rem; margin: 4px 0 0 0;">Créer un chunk personnalisé</p>
+            </div>
+        </div>
+        <form id="manualForm" action="/admin/rag/add_chunk" method="POST" onsubmit="return false;">
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; color: #475569; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">Titre du chunk</label>
+                <input name="title" placeholder="Ex: Politique d'annulation" required
+                    style="width: 100%; padding: 0.875rem; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 0.95rem; outline: none;">
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; color: #475569; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">Contenu</label>
+                <textarea name="content" placeholder="Contenu du chunk..." required rows="3"
+                    style="width: 100%; padding: 0.875rem; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 0.95rem; resize: vertical; outline: none;"></textarea>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; color: #475569; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">Tags (optionnel)</label>
+                <input name="tags" placeholder="tag1, tag2, tag3"
+                    style="width: 100%; padding: 0.875rem; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 0.95rem; outline: none;">
+            </div>
+            <button type="button" id="addChunkBtn"
+                style="width: 100%; padding: 1rem; background: white; border: 2px solid #e2e8f0; border-radius: 12px; color: #475569; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem;">
+                <i class="ri-add-line"></i> Ajouter le Chunk
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Liste des Chunks -->
+<div style="background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #f1f5f9;">
+        <h3 style="font-size: 1.25rem; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+            <i class="ri-list-unordered" style="color: #6366f1;"></i>
+            Chunks Existants
+        </h3>
+        <span style="background: #e0e7ff; color: #4f46e5; padding: 0.5rem 1rem; border-radius: 50px; font-weight: 600; font-size: 0.9rem;">{{ chunks | length }}</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 1rem;">
+        {% for ch in chunks %}
+        <div style="background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 1.5rem;" id="chunk-{{ ch.id }}">
+            
+            <!-- ===== VIEW MODE ===== -->
+            <div id="view-{{ ch.id }}">
+                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;">
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                            <h4 style="font-size: 1.1rem; font-weight: 600; color: #1e293b; margin: 0;">{{ ch.title }}</h4>
+                            <span style="background: #e2e8f0; color: #64748b; padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-weight: 500;">ID: {{ ch.id }}</span>
+                            {% if ch.tags %}
+                            <span style="background: #dbeafe; color: #2563eb; padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-weight: 500;">
+                                <i class="ri-price-tag-3-line"></i> {{ ch.tags }}
+                            </span>
+                            {% endif %}
+                        </div>
+                        <p style="color: #64748b; font-size: 0.95rem; line-height: 1.6; margin: 0;">
+                            {{ ch.content[:200] }}{% if ch.content | length > 200 %}...{% endif %}
+                        </p>
+                    </div>
+                    <!-- Boutons Modifier + Supprimer -->
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <button onclick="showEdit({{ ch.id }})"
+                            style="background: #e0e7ff; border: none; color: #4f46e5; padding: 0.75rem 1.25rem; border-radius: 10px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                            <i class="ri-edit-line"></i> Modifier
+                        </button>
+                        <button onclick="deleteChunk({{ ch.id }})"
+                            style="background: #fee2e2; border: none; color: #dc2626; padding: 0.75rem 1.25rem; border-radius: 10px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                            <i class="ri-delete-bin-6-line"></i> Supprimer
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== EDIT MODE (caché par défaut) ===== -->
+            <div id="edit-{{ ch.id }}" style="display: none;">
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; color: #475569; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">Titre</label>
+                    <input id="edit-title-{{ ch.id }}" value="{{ ch.title }}"
+                        style="width: 100%; padding: 0.75rem; border: 2px solid #6366f1; border-radius: 10px; font-size: 0.95rem; outline: none;">
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; color: #475569; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">Contenu</label>
+                    <textarea id="edit-content-{{ ch.id }}" rows="4"
+                        style="width: 100%; padding: 0.75rem; border: 2px solid #6366f1; border-radius: 10px; font-size: 0.95rem; resize: vertical; outline: none;">{{ ch.content }}</textarea>
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; color: #475569; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">Tags</label>
+                    <input id="edit-tags-{{ ch.id }}" value="{{ ch.tags or '' }}"
+                        style="width: 100%; padding: 0.75rem; border: 2px solid #6366f1; border-radius: 10px; font-size: 0.95rem; outline: none;">
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="saveChunk({{ ch.id }})"
+                        style="flex: 1; padding: 0.875rem; background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; border-radius: 10px; color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <i class="ri-save-line"></i> Sauvegarder
+                    </button>
+                    <button onclick="cancelEdit({{ ch.id }})"
+                        style="padding: 0.875rem 1.5rem; background: white; border: 2px solid #e2e8f0; border-radius: 10px; color: #64748b; font-weight: 600; cursor: pointer;">
+                        Annuler
+                    </button>
+                </div>
+            </div>
+
+        </div>
+        {% endfor %}
+        
+        {% if not chunks %}
+        <div style="text-align: center; padding: 4rem 2rem; color: #94a3b8;">
+            <i class="ri-folder-unknown-line" style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+            <p style="font-size: 1.1rem; font-weight: 500; margin: 0 0 0.5rem 0; color: #64748b;">Aucun chunk disponible</p>
+            <p style="font-size: 0.9rem; margin: 0;">Commencez par uploader un document ou créer un chunk manuel</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const fileInput   = document.getElementById('fileInput');
+const uploadBtn   = document.getElementById('uploadBtn');
+const fileName    = document.getElementById('fileName');
+const addChunkBtn = document.getElementById('addChunkBtn');
+
+// ===== FILE INPUT =====
+fileInput.addEventListener('change', function () {
+    const hasFile = !!this.files[0];
+    fileName.textContent    = hasFile ? this.files[0].name : 'Aucun fichier sélectionné';
+    uploadBtn.style.opacity = hasFile ? '1' : '0.5';
+    uploadBtn.style.cursor  = hasFile ? 'pointer' : 'not-allowed';
+    uploadBtn.dataset.ready = hasFile ? '1' : '0';
+});
+
+// ===== UPLOAD =====
+uploadBtn.addEventListener('click', async function () {
+    if (uploadBtn.dataset.ready !== '1') return;
+    const form = document.getElementById('uploadForm');
+    const originalHTML = uploadBtn.innerHTML;
+    uploadBtn.innerHTML = '⏳ Upload en cours...';
+    uploadBtn.dataset.ready = '0';
+    uploadBtn.style.opacity = '0.7';
+    uploadBtn.style.cursor = 'not-allowed';
+    try {
+        const res = await fetch(form.action, { method: 'POST', body: new FormData(form) });
+        if (res.ok) {
+            const data = await res.json();
+            alert(`✅ Upload réussi! ${data.chunks_added || 0} chunks ajoutés.`);
+            location.reload();
+        } else {
+            const error = await res.json();
+            alert("❌ Erreur: " + (error.detail || error.message || "Upload failed"));
+        }
+    } catch(err) {
+        alert("❌ Erreur de connexion: " + err.message);
+    } finally {
+        uploadBtn.innerHTML = originalHTML;
+        uploadBtn.style.opacity = '1';
+        uploadBtn.style.cursor = 'pointer';
+        uploadBtn.dataset.ready = '1';
+    }
+});
+
+// ===== ADD CHUNK =====
+addChunkBtn.addEventListener('click', async function () {
+    const form = document.getElementById('manualForm');
+    const originalHTML = addChunkBtn.innerHTML;
+    addChunkBtn.innerHTML = '⏳ Ajout en cours...';
+    addChunkBtn.disabled = true;
+    addChunkBtn.style.opacity = '0.7';
+    try {
+        const res = await fetch(form.action, { method: 'POST', body: new FormData(form) });
+        if (res.ok) {
+            location.reload();
+        } else {
+            const error = await res.json();
+            alert("❌ Erreur: " + (error.detail || error.message || "Ajout failed"));
+        }
+    } catch(err) {
+        alert("❌ Erreur de connexion: " + err.message);
+    } finally {
+        addChunkBtn.innerHTML = originalHTML;
+        addChunkBtn.disabled = false;
+        addChunkBtn.style.opacity = '1';
+    }
+});
+
+// ===== DELETE =====
+function deleteChunk(id) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce chunk définitivement ?')) {
+        fetch("/admin/rag/delete_chunk", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "cid=" + id
+        })
+        .then(res => {
+            if (res.ok) location.reload();
+            else alert("❌ Erreur lors de la suppression");
+        })
+        .catch(() => alert("❌ Erreur de connexion"));
+    }
+}
+
+// ===== EDIT: SHOW =====
+function showEdit(id) {
+    document.getElementById('view-' + id).style.display = 'none';
+    document.getElementById('edit-' + id).style.display = 'block';
+}
+
+// ===== EDIT: CANCEL =====
+function cancelEdit(id) {
+    document.getElementById('edit-' + id).style.display = 'none';
+    document.getElementById('view-' + id).style.display = 'block';
+}
+
+// ===== EDIT: SAVE =====
+async function saveChunk(id) {
+    const title   = document.getElementById('edit-title-'   + id).value;
+    const content = document.getElementById('edit-content-' + id).value;
+    const tags    = document.getElementById('edit-tags-'    + id).value;
+
+    const btn = document.querySelector(`#edit-${id} button[onclick="saveChunk(${id})"]`);
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '⏳ Sauvegarde...';
+    btn.disabled = true;
+
+    try {
+        const body = new URLSearchParams({ cid: id, title, content, tags });
+        const res = await fetch('/admin/rag/edit_chunk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString()
+        });
+        if (res.ok) {
+            location.reload();
+        } else {
+            const error = await res.json();
+            alert("❌ Erreur: " + (error.detail || "Modification failed"));
+        }
+    } catch(err) {
+        alert("❌ Erreur de connexion: " + err.message);
+    } finally {
+        btn.innerHTML = originalHTML;
+        btn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

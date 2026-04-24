@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Hostay{% endblock %}
+{% block page_title %}Vue d'ensemble{% endblock %}
+
+{% block content %}
+
+<!-- Stats Cards -->
+<div class="stats-grid">
+    <!-- Total Messages -->
+    <div class="stat-card">
+        <div class="stat-info">
+            <h3>Total Messages</h3>
+            <div class="value">{{ analytics.total | default(0) }}</div>
+        </div>
+        <div class="stat-icon icon-blue">
+            <i class="ri-message-2-line"></i>
+        </div>
+    </div>
+
+    <!-- Rôle Majoritaire (Simple Logic) -->
+    <div class="stat-card">
+        <div class="stat-info">
+            <h3>Rôle Majoritaire</h3>
+            <div class="value" style="font-size: 1.5rem;">
+                {% set roles = analytics.by_role | default({}) %}
+                {% if roles %}
+                    {% set max_role = "" %}
+                    {% set max_count = 0 %}
+                    {% for r, c in roles.items() %}
+                        {% if c > max_count %}
+                            {% set max_count = c %}
+                            {% set max_role = r %}
+                        {% endif %}
+                    {% endfor %}
+                    {{ max_role | capitalize }}
+                {% else %}
+                    -
+                {% endif %}
+            </div>
+        </div>
+        <div class="stat-icon icon-green">
+            <i class="ri-group-line"></i>
+        </div>
+    </div>
+
+    <!-- Urgences -->
+    <div class="stat-card">
+        <div class="stat-info">
+            <h3>Urgences Actives</h3>
+            <div class="value" style="color: #dc2626;">
+                {{ analytics.by_urgency.get('Urgence', 0) }}
+            </div>
+        </div>
+        <div class="stat-icon icon-red">
+            <i class="ri-alarm-warning-line"></i>
+        </div>
+    </div>
+
+    <!-- Langue Top (Simple Logic) -->
+    <div class="stat-card">
+        <div class="stat-info">
+            <h3>Langue Top</h3>
+            <div class="value" style="font-size: 1.5rem;">
+                {% set langs = analytics.by_lang | default({}) %}
+                {% if langs %}
+                    {% set max_lang = "" %}
+                    {% set max_count = 0 %}
+                    {% for l, c in langs.items() %}
+                        {% if c > max_count %}
+                            {% set max_count = c %}
+                            {% set max_lang = l %}
+                        {% endif %}
+                    {% endfor %}
+                    {{ max_lang }}
+                {% else %}
+                    -
+                {% endif %}
+            </div>
+        </div>
+        <div class="stat-icon icon-orange">
+            <i class="ri-translate-2"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Section Détails -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+    
+    <!-- Langues Détail -->
+    <div class="stat-card" style="flex-direction: column;">
+        <div class="section-title"><i class="ri-global-line"></i> Répartition des Langues</div>
+        {% for l, c in (analytics.by_lang | default({})).items() %}
+        <div style="display: flex; justify-content: space-between; padding: 0.8rem 0; border-bottom: 1px solid #f1f5f9;">
+            <span style="display: flex; align-items: center; gap: 8px;">
+                <i class="ri-flag-line" style="color: var(--primary);"></i> {{ l }}
+            </span>
+            <span class="fw-bold">{{ c }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Rôles Détail -->
+    <div class="stat-card" style="flex-direction: column;">
+        <div class="section-title"><i class="ri-user-settings-line"></i> Activité par Rôle</div>
+        {% for r, c in (analytics.by_role | default({})).items() %}
+        <div style="display: flex; justify-content: space-between; padding: 0.8rem 0; border-bottom: 1px solid #f1f5f9;">
+            <span style="display: flex; align-items: center; gap: 8px;">
+                <i class="ri-user-line" style="color: var(--primary);"></i> {{ r | capitalize }}
+            </span>
+            <span class="fw-bold">{{ c }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Actions -->
+<div style="display: flex; gap: 1rem; margin-top: 2rem;">
+    <a href="/" class="btn-action btn-primary" target="_blank">
+        <i class="ri-robot-line"></i> Tester le Chatbot
+    </a>
+    <a href="/admin/conversations" class="btn-action btn-outline">
+        <i class="ri-list-check"></i> Voir Conversations
+    </a>
+    <button onclick="location.reload()" class="btn-action btn-outline" style="margin-left: auto;">
+        <i class="ri-refresh-line"></i> Rafraîchir
+    </button>
+</div>
+
+{% endblock %}

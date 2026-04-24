@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .chat-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 800px;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .chat-header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .chat-header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .chat-body {
+            padding: 30px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            padding: 15px 20px;
+            border-radius: 15px;
+            max-width: 80%;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .user-message {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .bot-message {
+            background: #f0f0f0;
+            color: #333;
+            margin-right: auto;
+        }
+
+        .bot-message .label {
+            font-size: 0.8em;
+            color: #667eea;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .chat-input {
+            padding: 30px;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        select, input {
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        select:focus, input:focus {
+            border-color: #667eea;
+        }
+
+        select {
+            width: 150px;
+        }
+
+        input {
+            flex: 1;
+        }
+
+        button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .info {
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        .lang-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 0.75em;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .lang-fr { background: #0055A4; color: white; }
+        .lang-en { background: #012169; color: white; }
+        .lang-darija { background: #C1272D; color: white; }
+        .lang-ar { background: #007A3D; color: white; }
+
+        .conversation-id {
+            font-size: 0.75em;
+            color: #999;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🤖 Hostay Chatbot</h1>
+            <p>Assistant intelligent pour vos appartements</p>
+        </div>
+
+        <div class="chat-body">
+            {% if message %}
+            <!-- User Message -->
+            <div class="message user-message">
+                <strong>Vous:</strong> {{ message }}
+            </div>
+
+            <!-- Bot Message -->
+            <div class="message bot-message">
+                <div class="label">
+                    🤖 Hostay Bot
+                    {% if language == "French" %}
+                        <span class="lang-badge lang-fr">🇫🇷 FR</span>
+                    {% elif language == "English" %}
+                        <span class="lang-badge lang-en">🇬🇧 EN</span>
+                    {% elif language == "Moroccan Darija" %}
+                        <span class="lang-badge lang-darija">🇲🇦 DARIJA</span>
+                    {% elif language == "Arabic" %}
+                        <span class="lang-badge lang-ar">🇸🇦 AR</span>
+                    {% endif %}
+                </div>
+                {{ reply }}
+                <div class="conversation-id">ID: {{ conversation_id }}</div>
+            </div>
+            {% else %}
+            <div style="text-align: center; color: #999; padding: 50px;">
+                <p>👋 Salam! Kifach n9dar n3awnek?</p>
+                <p>Essaye: "kifach ndir reservation?" wla "Comment faire une réservation?"</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="chat-input">
+            <form method="POST" action="/chat-form">
+                <div class="input-group">
+                    <select name="role" required>
+                        <option value="guest" {% if role == "guest" %}selected{% endif %}>🧳 Guest</option>
+                        <option value="owner" {% if role == "owner" %}selected{% endif %}>🏠 Owner</option>
+                        <option value="concierge" {% if role == "concierge" %}selected{% endif %}>🔑 Concierge</option>
+                    </select>
+                    <!-- ✅ value masح -->
+                    <input
+                        type="text"
+                        name="message"
+                        placeholder="Écris ton message ici... (Darija, Français, Arabe, English)"
+                        required
+                        autofocus
+                    >
+                    <button type="submit">Envoyer 🚀</button>
+                </div>
+            </form>
+            <div class="info">
+                💡 Le bot détecte automatiquement la langue: Darija, Français, Arabe, ou English
+            </div>
+        </div>
+    </div>
+</body>
+</html>

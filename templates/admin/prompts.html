@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Prompts - Hostay{% endblock %}
+{% block page_title %}⚙️ Configuration des Prompts{% endblock %}
+
+{% block content %}
+
+<!-- Message de succès -->
+{% if msg %}
+<div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 1rem 1.5rem; border-radius: 12px; margin-bottom: 2rem; display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); animation: slideIn 0.3s ease-out;">
+    <i class="ri-checkbox-circle-line" style="font-size: 1.5rem;"></i>
+    <span style="font-weight: 500; font-size: 1rem;">{{ msg }}</span>
+</div>
+{% endif %}
+
+<form method="POST" style="display: flex; flex-direction: column; gap: 2rem;">
+    
+    <!-- Guest Prompt -->
+    <div style="background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; transition: all 0.3s;" onmouseover="this.style.boxShadow='0 8px 24px rgba(59, 130, 246, 0.15)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'; this.style.transform='translateY(0)'">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 1.5rem; padding-bottom: 1.25rem; border-bottom: 2px solid #f1f5f9;">
+            <div style="width: 56px; height: 56px; background: linear-gradient(135deg, #3b82f6, #2563eb); border-radius: 14px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.75rem; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);">
+                <i class="ri-user-line"></i>
+            </div>
+            <div style="flex: 1;">
+                <h3 style="font-size: 1.35rem; font-weight: 700; color: #1e293b; margin: 0 0 4px 0;">Prompt Guest</h3>
+                <p style="color: #64748b; font-size: 0.95rem; margin: 0;">Pour les voyageurs et utilisateurs de l'appartement</p>
+            </div>
+            <div style="background: #dbeafe; color: #2563eb; padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
+                <i class="ri-user-3-line"></i> Guest
+            </div>
+        </div>
+        <textarea name="guest" rows="6" style="width: 100%; padding: 1.25rem; border: 2px solid #e2e8f0; border-radius: 12px; font-family: 'Inter', sans-serif; font-size: 0.95rem; resize: vertical; transition: all 0.3s; background: #f8fafc; line-height: 1.6;" placeholder="Ex: Tu es l'assistant IA officiel de Hostay. Tu parles à un voyageur...">{{ prompts.guest }}</textarea>
+        <div style="margin-top: 0.75rem; color: #94a3b8; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+            <i class="ri-information-line"></i>
+            <span>Ce prompt sera utilisé pour tous les utilisateurs de type "Guest"</span>
+        </div>
+    </div>
+
+    <!-- Owner Prompt -->
+    <div style="background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; transition: all 0.3s;" onmouseover="this.style.boxShadow='0 8px 24px rgba(16, 185, 129, 0.15)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'; this.style.transform='translateY(0)'">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 1.5rem; padding-bottom: 1.25rem; border-bottom: 2px solid #f1f5f9;">
+            <div style="width: 56px; height: 56px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 14px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.75rem; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
+                <i class="ri-home-office-line"></i>
+            </div>
+            <div style="flex: 1;">
+                <h3 style="font-size: 1.35rem; font-weight: 700; color: #1e293b; margin: 0 0 4px 0;">Prompt Owner</h3>
+                <p style="color: #64748b; font-size: 0.95rem; margin: 0;">Pour les propriétaires Hostay</p>
+            </div>
+            <div style="background: #dcfce7; color: #166534; padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
+                <i class="ri-building-line"></i> Owner
+            </div>
+        </div>
+        <textarea name="owner" rows="6" style="width: 100%; padding: 1.25rem; border: 2px solid #e2e8f0; border-radius: 12px; font-family: 'Inter', sans-serif; font-size: 0.95rem; resize: vertical; transition: all 0.3s; background: #f8fafc; line-height: 1.6;" placeholder="Ex: Tu es l'assistant IA officiel de Hostay. Tu parles à un propriétaire...">{{ prompts.owner }}</textarea>
+        <div style="margin-top: 0.75rem; color: #94a3b8; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+            <i class="ri-information-line"></i>
+            <span>Ce prompt sera utilisé pour tous les propriétaires</span>
+        </div>
+    </div>
+
+    <!-- Concierge Prompt -->
+    <div style="background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; transition: all 0.3s;" onmouseover="this.style.boxShadow='0 8px 24px rgba(245, 158, 11, 0.15)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'; this.style.transform='translateY(0)'">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 1.5rem; padding-bottom: 1.25rem; border-bottom: 2px solid #f1f5f9;">
+            <div style="width: 56px; height: 56px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: 14px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.75rem; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);">
+                <i class="ri-key-2-line"></i>
+            </div>
+            <div style="flex: 1;">
+                <h3 style="font-size: 1.35rem; font-weight: 700; color: #1e293b; margin: 0 0 4px 0;">Prompt Concierge</h3>
+                <p style="color: #64748b; font-size: 0.95rem; margin: 0;">Pour les concierges et support</p>
+            </div>
+            <div style="background: #ffedd5; color: #c2410c; padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;">
+                <i class="ri-shield-keyhole-line"></i> Concierge
+            </div>
+        </div>
+        <textarea name="concierge" rows="6" style="width: 100%; padding: 1.25rem; border: 2px solid #e2e8f0; border-radius: 12px; font-family: 'Inter', sans-serif; font-size: 0.95rem; resize: vertical; transition: all 0.3s; background: #f8fafc; line-height: 1.6;" placeholder="Ex: Tu es l'assistant IA officiel de Hostay. Tu parles à un concierge...">{{ prompts.concierge }}</textarea>
+        <div style="margin-top: 0.75rem; color: #94a3b8; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+            <i class="ri-information-line"></i>
+            <span>Ce prompt sera utilisé pour l'équipe de conciergerie</span>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div style="display: flex; gap: 1rem; justify-content: flex-end; padding-top: 1rem; padding-bottom: 2rem;">
+        <button type="reset" style="padding: 1rem 2rem; background: white; border: 2px solid #e2e8f0; border-radius: 12px; color: #475569; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.3s; font-size: 0.95rem;" onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1'; this.style.transform='translateY(-2px)'" onmouseout="this.style.background='white'; this.style.borderColor='#e2e8f0'; this.style.transform='translateY(0)'">
+            <i class="ri-arrow-go-back-line" style="font-size: 1.1rem;"></i> 
+            Réinitialiser
+        </button>
+        <button type="submit" style="padding: 1rem 2.5rem; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); border: none; border-radius: 12px; color: white; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4); transition: all 0.3s; font-size: 0.95rem;" onmouseover="this.style.transform='translateY(-3px)'; this.style.boxShadow='0 8px 20px rgba(99, 102, 241, 0.5)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(99, 102, 241, 0.4)'">
+            <i class="ri-save-3-line" style="font-size: 1.2rem;"></i> 
+            Enregistrer les modifications
+        </button>
+    </div>
+</form>
+
+<style>
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+
+{% endblock %}

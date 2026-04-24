@@ -1,0 +1,14 @@
+# requirements.txt
+fastapi
+uvicorn
+pydantic
+PyJWT
+python-dotenv
+requests
+jinja2
+python-multipart
+sentence-transformers
+numpy
+scikit-learn
+PyPDF2>=3.0.0
+python-docx>=0.8.11
