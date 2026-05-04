@@ -23,6 +23,18 @@ async def fetch_user_context(token: str) -> str:
             
             if response.status_code == 200:
                 data = response.json()
+                
+                # Automatically fetch status for all properties
+                if "properties" in data:
+                    data["property_statuses"] = []
+                    for prop in data["properties"]:
+                        prop_id = prop.get("id")
+                        if prop_id:
+                            status_url = f"{BACKEND_URL}/api/v1/chatbot/property/{prop_id}/status"
+                            status_res = await client.get(status_url, headers=headers)
+                            if status_res.status_code == 200:
+                                data["property_statuses"].append(status_res.json())
+
                 import json
                 return json.dumps(data, ensure_ascii=False)
             else:
