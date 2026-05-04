@@ -4,8 +4,10 @@ import numpy as np
 import string
 import re
 from typing import List, Dict
+import logging
 
-from sentence_transformers import SentenceTransformer
+logger = logging.getLogger(__name__)
+
 from sklearn.metrics.pairwise import cosine_similarity
 
 import nltk
@@ -25,13 +27,6 @@ nltk.download('stopwords', quiet=True)
 nltk.download('wordnet', quiet=True)
 
 # =========================
-# EMBEDDING MODEL
-# =========================
-print("⏳ Loading embedding model...")
-MODEL = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-print("✅ Model loaded!")
-
-# =========================
 # RAG ENGINE CLASS
 # =========================
 class AdvancedRAGEngineV2:
@@ -40,6 +35,7 @@ class AdvancedRAGEngineV2:
         self.chunks = []
         self.embeddings = []
         self.cache = {}
+        self._model = None
 
         # Stop words (FR + EN + punctuation)
         self.stop_words = set(stopwords.words("english"))
@@ -49,6 +45,15 @@ class AdvancedRAGEngineV2:
         # Stemmers
         self.stemmer_fr = SnowballStemmer("french")
         self.stemmer_en = SnowballStemmer("english")
+
+    @property
+    def model(self):
+        if self._model is None:
+            logger.info("⏳ Lazy loading embedding model...")
+            from sentence_transformers import SentenceTransformer
+            self._model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+            logger.info("✅ Model loaded!")
+        return self._model
 
     # =========================
     # 1. TEXT CLEANING
@@ -134,9 +139,9 @@ class AdvancedRAGEngineV2:
 
             self.chunks.append(chunk)
             # Embedding sur texte original (SentenceTransformer gère mieux l'original)
-            self.embeddings.append(MODEL.encode(original))
+            self.embeddings.append(self.model.encode(original))
 
-        print(f"✅ Added: {title} ({len(sentences)} chunks)")
+        logger.info(f"✅ Added: {title} ({len(sentences)} chunks)")
 
     # =========================
     # SEARCH
@@ -148,7 +153,7 @@ class AdvancedRAGEngineV2:
 
         # Preprocessing sur la query aussi
         query_clean = self.clean_text(query)
-        query_emb   = MODEL.encode(query_clean)
+        query_emb   = self.model.encode(query_clean)
 
         scores = cosine_similarity([query_emb], self.embeddings)[0]
 
@@ -190,7 +195,7 @@ class AdvancedRAGEngineV2:
         """Pipeline complet: Cache → RAG → LLM"""
         # 1. Cache
         if question in self.cache:
-            if debug: print("⚡ Cache hit")
+            if debug: logger.info("⚡ Cache hit")
             return self.cache[question]
 
         # 2. Preprocess query
@@ -239,7 +244,7 @@ Rules:
                 content=chunk["content"],
                 tags=chunk.get("tags", "")
             )
-        print(f"✅ Loaded {len(chunks)} chunks from database")
+        logger.info(f"✅ Loaded {len(chunks)} chunks from database")
 
 
 # =========================

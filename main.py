@@ -1,13 +1,21 @@
 # main.py - Hostay Chatbot (Clean Architecture)
 
 import os
+import logging
 from dotenv import load_dotenv
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, Depends, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 
 import jwt
 
@@ -15,12 +23,26 @@ import database
 from auth import get_current_user
 from chatbot import get_answer
 from admin_routes import router as admin_router
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # Load env
 load_dotenv()
 
-# App
-app = FastAPI()
+# =========================
+# APP & INIT DB
+# =========================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    database.init_db()
+    logger.info("✅ Database initialized")
+    yield
+
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI(lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.router.redirect_slashes = False
 
 # Templates & Static
@@ -28,22 +50,19 @@ templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Secret
-SECRET = os.getenv("JWT_SECRET", "MYSECRET")
+SECRET = os.getenv("JWT_SECRET")
+if not SECRET:
+    raise RuntimeError("Missing JWT_SECRET — server cannot start")
 
-# =========================
-# INIT DB
-# =========================
-@app.on_event("startup")
-async def startup_event():
-    database.init_db()
-    print("✅ Database initialized")
 
+from typing import Optional
 
 # =========================
 # MODELS
 # =========================
 class ChatRequest(BaseModel):
     message: str
+    session_id: Optional[str] = None
 
 
 # =========================
@@ -63,37 +82,21 @@ async def favicon():
 
 
 # =========================
-# AUTH - DEMO LOGIN
-# =========================
-@app.post("/login")
-def login():
-    user = {
-        "user_hashId": "demo_123",
-        "role": "guest",
-        "reservation_hashId": "res_456"
-    }
-
-    token = jwt.encode(user, SECRET, algorithm="HS256")
-
-    return {"access_token": token}
-
-
-# =========================
 # MAIN CHAT API (JWT PROTECTED)
 # =========================
 @app.post("/chat")
-def chat(req: ChatRequest, user=Depends(get_current_user)):
+@limiter.limit("20/minute")
+async def chat(request: Request, req: ChatRequest, user=Depends(get_current_user)):
     """
     Secure chatbot endpoint with JWT user context
     """
-
-    result = get_answer(req.message, user["role"])
+    result = await get_answer(req.message, user["role"], req.session_id, user.get("token"))
 
     return {
         "user": user,
         "reply": result["reply"],
         "saved": result.get("saved", False),
-        "conversation_id": result.get("conversation_id", -1)
+        "session_id": result.get("session_id")
     }
 
 
@@ -105,36 +108,4 @@ async def chat_page(request: Request):
     return templates.TemplateResponse("chat.html", {
         "request": request,
         "title": "Hostay Chatbot"
-    })
-
-
-# =========================
-# FORM CHAT (NO POSTMAN)
-# =========================
-@app.post("/chat-form", response_class=HTMLResponse)
-async def chat_form(
-    request: Request,
-    message: str = Form(...),
-    role: str = Form("guest")
-):
-    """
-    Simple HTML testing endpoint
-    """
-
-    user = {
-        "user_hashId": "demo_123",
-        "role": role,
-        "reservation_hashId": "res_456"
-    }
-
-    result = get_answer(message, role)
-
-    return templates.TemplateResponse("chat.html", {
-        "request": request,
-        "title": "Hostay Chatbot",
-        "message": message,
-        "reply": result["reply"],
-        "language": result.get("language", "en"),
-        "conversation_id": result.get("conversation_id", -1),
-        "role": role
     })

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Conversations - Hostay{% endblock %}
+{% block title %}Conversations - Hostay Chatbot{% endblock %}
 {% block page_title %}💬 Historique des Conversations{% endblock %}
 
 {% block content %}
@@ -8,8 +8,8 @@
 <div class="stats-grid" style="margin-bottom: 1.5rem;">
     <div class="stat-card">
         <div class="stat-info">
-            <h3>Total Conversations</h3>
-            <div class="value">{{ conversations | length }}</div>
+            <h3>Total Sessions</h3>
+            <div class="value">{{ sessions | length }}</div>
         </div>
         <div class="stat-icon icon-blue">
             <i class="ri-chat-1-line"></i>
@@ -23,38 +23,37 @@
         <table style="width: 100%; border-collapse: collapse;">
             <thead style="background: #f8fafc; border-bottom: 2px solid var(--border);">
                 <tr>
-                    <th style="padding: 1rem; text-align: left; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">ID</th>
+                    <th style="padding: 1rem; text-align: left; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Session ID</th>
                     <th style="padding: 1rem; text-align: left; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Rôle</th>
                     <th style="padding: 1rem; text-align: left; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Langue</th>
                     <th style="padding: 1rem; text-align: left; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Urgence</th>
                     <th style="padding: 1rem; text-align: left; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Date</th>
-                    <th style="padding: 1rem; text-align: left; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Message</th>
                     <th style="padding: 1rem; text-align: center; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                {% for c in conversations %}
+                {% for s in sessions %}
                 <tr style="border-bottom: 1px solid var(--border); {% if loop.last %}border-bottom: none{% endif %}; transition: background 0.2s;">
-                    <td style="padding: 1rem; font-weight: 600; color: var(--primary);">#{{ c.id }}</td>
+                    <td style="padding: 1rem; font-weight: 600; color: var(--primary); font-size: 0.8rem;">{{ s.id[:8] }}...</td>
                     <td style="padding: 1rem;">
                         <span style="display: inline-flex; align-items: center; gap: 6px; padding: 0.25rem 0.75rem; border-radius: 50px; font-size: 0.85rem; font-weight: 500;
-                            {% if c.user_role == 'guest' %}background: #dbeafe; color: #1e40af;
-                            {% elif c.user_role == 'owner' %}background: #dcfce7; color: #166534;
+                            {% if s.user_role == 'guest' %}background: #dbeafe; color: #1e40af;
+                            {% elif s.user_role == 'owner' %}background: #dcfce7; color: #166534;
                             {% else %}background: #ffedd5; color: #c2410c;{% endif %}">
-                            <i class="ri-user-3-line"></i> {{ c.user_role | capitalize }}
+                            <i class="ri-user-3-line"></i> {{ s.user_role | capitalize }}
                         </span>
                     </td>
                     <td style="padding: 1rem;">
                         <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem;">
-                            {% if 'Darija' in c.language %}<i class="ri-flag-line" style="color: #c1272d;"></i>
-                            {% elif 'French' in c.language %}<i class="ri-flag-line" style="color: #0055A4;"></i>
-                            {% elif 'English' in c.language %}<i class="ri-flag-line" style="color: #012169;"></i>
+                            {% if 'Darija' in s.language %}<i class="ri-flag-line" style="color: #c1272d;"></i>
+                            {% elif 'French' in s.language %}<i class="ri-flag-line" style="color: #0055A4;"></i>
+                            {% elif 'English' in s.language %}<i class="ri-flag-line" style="color: #012169;"></i>
                             {% else %}<i class="ri-flag-line" style="color: #007A3D;"></i>{% endif %}
-                            {{ c.language }}
+                            {{ s.language }}
                         </span>
                     </td>
                     <td style="padding: 1rem;">
-                        {% if c.urgency_level == 'Urgence' %}
+                        {% if s.urgency_level == 'Urgence' %}
                         <span style="display: inline-flex; align-items: center; gap: 6px; padding: 0.25rem 0.75rem; border-radius: 50px; background: #fee2e2; color: #dc2626; font-size: 0.85rem; font-weight: 600;">
                             <i class="ri-alarm-warning-line"></i> Urgence
                         </span>
@@ -66,15 +65,13 @@
                     </td>
                     <td style="padding: 1rem; color: var(--text-muted); font-size: 0.9rem;">
                         <i class="ri-time-line" style="margin-right: 5px;"></i>
-                        {{ c.timestamp[:16].replace('T', ' ') }}
-                    </td>
-                    <td style="padding: 1rem; max-width: 300px; color: var(--text-main);">
-                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ c.message }}">
-                            {{ c.message[:60] }}{% if c.message | length > 60 %}...{% endif %}
-                        </div>
+                        {{ s.timestamp[:16].replace('T', ' ') }}
                     </td>
                     <td style="padding: 1rem; text-align: center;">
-                        <button onclick="deleteConversation({{ c.id }})" style="background: none; border: none; color: #dc2626; cursor: pointer; padding: 0.5rem; border-radius: 6px; transition: all 0.2s;" title="Supprimer">
+                        <a href="/admin/conversations/{{ s.id }}" style="display: inline-block; padding: 0.4rem 0.8rem; background: var(--primary); color: white; border-radius: 6px; text-decoration: none; font-size: 0.85rem; font-weight: 500; margin-right: 5px; transition: background 0.2s;" title="Voir la session">
+                            <i class="ri-eye-line"></i> Voir
+                        </a>
+                        <button onclick="deleteSession('{{ s.id }}')" style="background: none; border: none; color: #dc2626; cursor: pointer; padding: 0.5rem; border-radius: 6px; transition: all 0.2s;" title="Supprimer">
                             <i class="ri-delete-bin-6-line" style="font-size: 1.2rem;"></i>
                         </button>
                     </td>
@@ -84,10 +81,10 @@
         </table>
     </div>
     
-    {% if not conversations %}
+    {% if not sessions %}
     <div style="text-align: center; padding: 3rem; color: var(--text-muted);">
-        <i class="ri-inbox-line" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
-        <p>Aucune conversation enregistrée</p>
+        <i class="ri-chat-history-line" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+        <p>Aucune session enregistrée</p>
     </div>
     {% endif %}
 </div>
@@ -96,12 +93,12 @@
 
 {% block scripts %}
 <script>
-function deleteConversation(id) {
-    if(confirm('Êtes-vous sûr de vouloir supprimer cette conversation ?')) {
+function deleteSession(id) {
+    if(confirm('Êtes-vous sûr de vouloir supprimer cette session et tous ses messages ?')) {
         fetch('/admin/conversations/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'conv_id=' + id
+            body: 'session_id=' + encodeURIComponent(id)
         }).then(() => location.reload());
     }
 }

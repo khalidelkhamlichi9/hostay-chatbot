@@ -1,5 +1,5 @@
 # admin_routes.py - Routes Admin pour Hostay Chatbot
-from fastapi import APIRouter, Request, Form, UploadFile, File, HTTPException
+from fastapi import APIRouter, Request, Form, UploadFile, File, HTTPException, Cookie, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 import database
@@ -11,7 +11,7 @@ import nltk
 from nltk.tokenize import sent_tokenize
 from llm_client import translate_to_english
 import re
-from jose import jwt
+from jose import jwt, JWTError
 from fastapi.responses import RedirectResponse
 
 # Télécharger les données NLTK si nécessaires
@@ -21,9 +21,24 @@ nltk.download('punkt_tab', quiet=True)
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
-ADMIN_USER = "admin"
-ADMIN_PASS = "admin123"
-SECRET = "MYSECRET"
+import os
+
+ADMIN_USER = os.getenv("ADMIN_USER")
+ADMIN_PASS = os.getenv("ADMIN_PASS")
+SECRET = os.getenv("JWT_SECRET")
+
+if not all([ADMIN_USER, ADMIN_PASS, SECRET]):
+    raise RuntimeError("Missing ADMIN_USER, ADMIN_PASS, JWT_SECRET variables")
+
+def require_admin(admin_token: str = Cookie(default=None)):
+    if not admin_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(admin_token, SECRET, algorithms=["HS256"])
+        if payload.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Access denied")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 # ==========================================
 # 🧹 PREPROCESSING
 # ==========================================
@@ -43,7 +58,7 @@ def clean_text(text: str) -> str:
 # 📊 DASHBOARD
 # ==========================================
 @router.get("/admin", response_class=HTMLResponse)
-async def admin_dashboard(request: Request):
+async def admin_dashboard(request: Request, _=Depends(require_admin)):
     analytics = database.get_analytics()
     return templates.TemplateResponse("admin/dashboard.html", {"request": request, "analytics": analytics})
 
@@ -51,7 +66,7 @@ async def admin_dashboard(request: Request):
 # ⚙️ PROMPTS
 # ==========================================
 @router.get("/admin/prompts", response_class=HTMLResponse)
-async def get_prompts(request: Request):
+async def get_prompts(request: Request, _=Depends(require_admin)):
     prompts = {
         "guest": database.get_prompt("guest"),
         "owner": database.get_prompt("owner"),
@@ -63,7 +78,8 @@ async def get_prompts(request: Request):
 async def save_prompts(request: Request,
                        guest: str = Form(...),
                        owner: str = Form(...),
-                       concierge: str = Form(...)):
+                       concierge: str = Form(...),
+                       _=Depends(require_admin)):
     database.save_prompt("guest", guest)
     database.save_prompt("owner", owner)
     database.save_prompt("concierge", concierge)
@@ -74,16 +90,31 @@ async def save_prompts(request: Request,
     })
 
 # ==========================================
-# 💬 CONVERSATIONS
+# 💬 CONVERSATIONS / SESSIONS
 # ==========================================
 @router.get("/admin/conversations", response_class=HTMLResponse)
-async def list_conversations(request: Request):
-    convos = database.get_all_conversations()
-    return templates.TemplateResponse("admin/conversations.html", {"request": request, "conversations": convos})
+async def list_conversations(request: Request, _=Depends(require_admin)):
+    sessions = database.get_all_sessions()
+    return templates.TemplateResponse("admin/conversations.html", {"request": request, "sessions": sessions})
+
+@router.get("/admin/conversations/{session_id}", response_class=HTMLResponse)
+async def view_session(request: Request, session_id: str, _=Depends(require_admin)):
+    session = database.get_session(session_id)
+    messages = database.get_session_messages(session_id)
+    return templates.TemplateResponse("admin/session_detail.html", {
+        "request": request, 
+        "session": session, 
+        "messages": messages
+    })
 
 @router.post("/admin/conversations/delete")
-async def delete_convo(conv_id: int = Form(...)):
-    database.delete_conversation(conv_id)
+async def delete_convo(session_id: str = Form(...), _=Depends(require_admin)):
+    database.delete_session(session_id)
+    return {"status": "ok"}
+
+@router.post("/admin/messages/edit")
+async def edit_message(msg_id: int = Form(...), content: str = Form(...), _=Depends(require_admin)):
+    database.update_message(msg_id, content)
     return {"status": "ok"}
 @router.get("/admin/login", response_class=HTMLResponse)
 async def login_page(request: Request):
@@ -110,7 +141,7 @@ async def admin_login(
 # 📚 RAG CHUNKS
 # ==========================================
 @router.get("/admin/rag", response_class=HTMLResponse)
-async def rag_manager(request: Request):
+async def rag_manager(request: Request, _=Depends(require_admin)):
     chunks = database.get_all_chunks()
     return templates.TemplateResponse("admin/rag.html", {"request": request, "chunks": chunks})
 
@@ -120,7 +151,8 @@ async def add_chunk_manual(
     doc_id: str = Form("manual"),
     title: str = Form("..."),
     content: str = Form(...),
-    tags: str = Form("")
+    tags: str = Form(""),
+    _=Depends(require_admin)
 ):
     cleaned = clean_text(content)
     translated = translate_to_english(cleaned)
@@ -135,7 +167,7 @@ async def add_chunk_manual(
     return {"status": "ok", "id": cid}
 
 @router.post("/admin/rag/delete_chunk")
-async def delete_chunk_manual(cid: int = Form(...)):
+async def delete_chunk_manual(cid: int = Form(...), _=Depends(require_admin)):
     database.delete_chunk(cid)
     return {"status": "ok"}
 
@@ -145,7 +177,8 @@ async def edit_chunk(
     cid: int = Form(...),
     title: str = Form(...),
     content: str = Form(...),
-    tags: str = Form("")
+    tags: str = Form(""),
+    _=Depends(require_admin)
 ):
     cleaned = clean_text(content)
     translated = translate_to_english(cleaned)
@@ -155,9 +188,10 @@ async def edit_chunk(
 
 # ✅ UPLOAD COMPLET (CLEAN → TRANSLATE → TOKENIZE)
 @router.post("/admin/rag/upload")
-async def upload_doc(file: UploadFile = File(...)):
+async def upload_doc(file: UploadFile = File(...), _=Depends(require_admin)):
     """Upload & Auto-Chunking (TXT, MD, PDF, DOCX)"""
 
+    MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
     allowed_extensions = ['.txt', '.md', '.pdf', '.doc', '.docx']
     file_ext = '.' + file.filename.split('.')[-1].lower()
 
@@ -168,6 +202,8 @@ async def upload_doc(file: UploadFile = File(...)):
 
     try:
         file_data = await file.read()
+        if len(file_data) > MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=413, detail="File too large (max 10MB)")
 
         # 1️⃣ Extraction
         if file_ext == '.pdf':

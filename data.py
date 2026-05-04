@@ -1,6 +1,9 @@
 # data.py - RAG amélioré pour Hostay (FIXED - reads from DB)
 import re
 import database
+import logging
+
+logger = logging.getLogger(__name__)
 
 KNOWLEDGE_BASE = [
     {
@@ -99,7 +102,7 @@ def retrieve_context(query: str, max_results: int = 3) -> str:
                 scored_entries.append((score, f"[{title}] {content}"))
 
     except Exception as e:
-        print(f"⚠️ DB chunks error: {e}")
+        logger.warning(f"⚠️ DB chunks error: {e}")
 
     # ===== 3. Sort + return top results =====
     scored_entries.sort(key=lambda x: x[0], reverse=True)

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Détail de la Session - Hostay Chatbot{% endblock %}
+{% block page_title %}💬 Détail de la Session{% endblock %}
+
+{% block content %}
+<div class="stat-card" style="margin-bottom: 1.5rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h3 style="margin-bottom: 0.5rem;">Session: {{ session.id }}</h3>
+            <div style="display: flex; gap: 10px; font-size: 0.9rem; color: var(--text-muted);">
+                <span><i class="ri-user-3-line"></i> {{ session.user_role | capitalize }}</span>
+                <span><i class="ri-global-line"></i> {{ session.language }}</span>
+                <span><i class="ri-time-line"></i> {{ session.timestamp[:16].replace('T', ' ') }}</span>
+            </div>
+        </div>
+        <a href="/admin/conversations" style="padding: 0.5rem 1rem; background: var(--bg-hover); color: var(--text-main); border-radius: 8px; text-decoration: none; font-weight: 500;">
+            <i class="ri-arrow-left-line"></i> Retour
+        </a>
+    </div>
+</div>
+
+<div class="stat-card" style="padding: 1.5rem;">
+    <h3 style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">Messages</h3>
+    
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+        {% for msg in messages %}
+        <div style="display: flex; flex-direction: column; max-width: 80%; {% if msg.role == 'user' %}align-self: flex-end; align-items: flex-end;{% else %}align-self: flex-start; align-items: flex-start;{% endif %}">
+            
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem;">
+                {% if msg.role == 'user' %}<i class="ri-user-line"></i> Utilisateur{% else %}<i class="ri-robot-2-line"></i> Assistant{% endif %} - {{ msg.timestamp[11:16] }}
+            </div>
+            
+            <div id="msg-display-{{ msg.id }}" style="padding: 1rem; border-radius: 12px; position: relative;
+                {% if msg.role == 'user' %}
+                    background: var(--primary); color: white; border-bottom-right-radius: 0;
+                {% else %}
+                    background: #f1f5f9; color: var(--text-main); border-bottom-left-radius: 0;
+                {% endif %}">
+                {{ msg.content | replace('\n', '<br>') | safe }}
+                
+                <button onclick="editMessage({{ msg.id }})" style="position: absolute; top: -10px; right: -10px; background: white; border: 1px solid var(--border); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); box-shadow: 0 2px 5px rgba(0,0,0,0.1);" title="Modifier">
+                    <i class="ri-pencil-line" style="font-size: 0.8rem;"></i>
+                </button>
+            </div>
+
+            <!-- Edit Form (Hidden by default) -->
+            <div id="msg-edit-{{ msg.id }}" style="display: none; width: 100%; margin-top: 0.5rem;">
+                <textarea id="msg-input-{{ msg.id }}" style="width: 100%; min-height: 80px; padding: 0.8rem; border: 1px solid var(--primary); border-radius: 8px; font-family: inherit; margin-bottom: 0.5rem; resize: vertical;">{{ msg.content }}</textarea>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button onclick="cancelEdit({{ msg.id }})" style="padding: 0.4rem 0.8rem; background: var(--bg-hover); color: var(--text-main); border: none; border-radius: 6px; cursor: pointer;">Annuler</button>
+                    <button onclick="saveMessage({{ msg.id }})" style="padding: 0.4rem 0.8rem; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer;">Enregistrer</button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        
+        {% if not messages %}
+        <div style="text-align: center; color: var(--text-muted); padding: 2rem;">
+            Aucun message dans cette session.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function editMessage(id) {
+    document.getElementById('msg-display-' + id).style.display = 'none';
+    document.getElementById('msg-edit-' + id).style.display = 'block';
+}
+
+function cancelEdit(id) {
+    document.getElementById('msg-display-' + id).style.display = 'block';
+    document.getElementById('msg-edit-' + id).style.display = 'none';
+}
+
+function saveMessage(id) {
+    const content = document.getElementById('msg-input-' + id).value;
+    
+    fetch('/admin/messages/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'msg_id=' + id + '&content=' + encodeURIComponent(content)
+    }).then(res => res.json())
+      .then(data => {
+          if(data.status === 'ok') {
+              location.reload();
+          } else {
+              alert("Erreur lors de la sauvegarde.");
+          }
+      });
+}
+</script>
+{% endblock %}

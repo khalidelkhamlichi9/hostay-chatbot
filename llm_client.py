@@ -2,6 +2,9 @@
 import os
 import requests
 from dotenv import load_dotenv
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 🔥 Charger les variables d'environnement (.env file)
 load_dotenv()
@@ -16,7 +19,7 @@ def call_llm(prompt: str) -> str:
     api_key = os.getenv("OPENROUTER_API_KEY")
     
     if not api_key:
-        print("❌ ERREUR: OPENROUTER_API_KEY non trouvée dans .env")
+        logger.error("❌ ERREUR: OPENROUTER_API_KEY non trouvée dans .env")
         return "❌ API key missing"
 
     # 🌐 Configuration de l'API OpenRouter
@@ -45,7 +48,7 @@ def call_llm(prompt: str) -> str:
         
         # ❌ Gestion des erreurs HTTP
         if response.status_code != 200:
-            print(f"❌ HTTP Error {response.status_code}: {response.text}")
+            logger.error(f"❌ HTTP Error {response.status_code}: {response.text}")
             return f"❌ API Error {response.status_code}"
         
         # ✅ Parsing de la réponse JSON
@@ -55,19 +58,19 @@ def call_llm(prompt: str) -> str:
         if "choices" in data and len(data["choices"]) > 0:
             return data["choices"][0]["message"]["content"]
         else:
-            print(f"❌ Réponse inattendue: {data}")
+            logger.error(f"❌ Réponse inattendue: {data}")
             return "❌ Format de réponse invalide"
             
     except requests.exceptions.Timeout:
-        print("❌ Timeout: La requête a pris trop de temps")
+        logger.error("❌ Timeout: La requête a pris trop de temps")
         return "❌ Timeout error"
         
     except requests.exceptions.ConnectionError:
-        print("❌ ConnectionError: Vérifiez votre connexion internet")
+        logger.error("❌ ConnectionError: Vérifiez votre connexion internet")
         return "❌ Connection error"
         
     except Exception as e:
-        print(f"❌ Exception inattendue: {str(e)}")
+        logger.error(f"❌ Exception inattendue: {str(e)}")
         return f"❌ Server error: {str(e)}"
 
 def translate_to_english(text: str) -> str:

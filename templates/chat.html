@@ -192,7 +192,7 @@
                     {% endif %}
                 </div>
                 {{ reply }}
-                <div class="conversation-id">ID: {{ conversation_id }}</div>
+                <div class="conversation-id">Session ID: {{ session_id }}</div>
             </div>
             {% else %}
             <div style="text-align: center; color: #999; padding: 50px;">
@@ -210,6 +210,9 @@
                         <option value="owner" {% if role == "owner" %}selected{% endif %}>🏠 Owner</option>
                         <option value="concierge" {% if role == "concierge" %}selected{% endif %}>🔑 Concierge</option>
                     </select>
+                    {% if session_id %}
+                    <input type="hidden" name="session_id" value="{{ session_id }}">
+                    {% endif %}
                     <!-- ✅ value masح -->
                     <input
                         type="text"

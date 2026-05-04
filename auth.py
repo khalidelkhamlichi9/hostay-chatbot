@@ -1,9 +1,12 @@
 # auth.py
 
 from jose import jwt, JWTError
-from fastapi import Header, HTTPException
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
+from dotenv import load_dotenv
 
+load_dotenv()
 SECRET_KEY = os.getenv("JWT_SECRET", "secret")
 ALGORITHM = "HS256"
 
@@ -13,7 +16,12 @@ ALGORITHM = "HS256"
 # -----------------------------
 def decode_jwt(token: str):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        options = {
+            "verify_aud": False,
+            "verify_iss": False,
+            "verify_sub": False
+        }
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options=options)
 
         return {
             "user_hashId": payload.get("user_hashId"),
@@ -21,23 +29,25 @@ def decode_jwt(token: str):
             "reservation_hashId": payload.get("reservation_hashId")
         }
 
-    except JWTError:
+    except JWTError as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"JWT Decode Error: {e}")
         return None
 
 
 # -----------------------------
 # 🔐 FastAPI dependency
 # -----------------------------
-def get_current_user(authorization: str = Header(None)):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing token")
+security = HTTPBearer()
 
-    # Remove "Bearer "
-    token = authorization.replace("Bearer ", "")
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
 
     payload = decode_jwt(token)
 
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+    payload["token"] = token
     return payload
