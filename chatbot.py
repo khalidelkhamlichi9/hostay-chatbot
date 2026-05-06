@@ -7,6 +7,7 @@ from rag_engine_v2 import rag_engine
 from backend_client import fetch_user_context
 from tension import classify_tension
 from dotenv import load_dotenv
+from cache import cache
 import database
 from database import get_prompt  # ← Import dynamique prompt
 
@@ -126,6 +127,14 @@ async def get_answer(message: str, role: str, session_id: str = None, token: str
     lang = detect_language(message)
     tension = classify_tension(message)
     
+    # 🔥 CACHE STATIQUE (uniquement si pas de session complexe)
+    if not session_id:
+        cache_key = f"static_ans_{role}_{lang}_{message}"
+        cached = await cache.get(cache_key)
+        if cached:
+            logger.info(f"⚡ Cache statique hit pour: {message}")
+            return cached
+
     rag_context = await rag_engine.get_context(message)
     if not rag_context:
         rag_context = await retrieve_context(message)
@@ -185,7 +194,14 @@ async def get_answer(message: str, role: str, session_id: str = None, token: str
         database.add_message(session_id, "user", message)
         database.add_message(session_id, "assistant", final)
         
-        return {"reply": final, "saved": True, "session_id": session_id, "language": lang}
+        result = {"reply": final, "saved": True, "session_id": session_id, "language": lang}
+
+        # 🔥 Sauvegarde cache si statique (pas de données live du backend)
+        if not real_data:
+            cache_key = f"static_ans_{role}_{lang}_{message}"
+            await cache.set(cache_key, result, expire=3600) # 1 heure
+
+        return result
 
     except httpx.TimeoutException:
         fallback_msg = "⏳ Désolé, l'IA prend trop de temps à répondre. Si c'est urgent, veuillez contacter le concierge."

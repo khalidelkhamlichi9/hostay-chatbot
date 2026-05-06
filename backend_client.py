@@ -15,12 +15,6 @@ async def fetch_user_context(token: str) -> str:
     if not token:
         return ""
         
-    cache_key = f"user_context_{token[-10:]}" # Use last 10 chars of token as part of key
-    cached_data = await cache.get(cache_key)
-    if cached_data:
-        logger.info(f"💾 Returning cached context for {cache_key}")
-        return cached_data
-
     url = f"{BACKEND_URL}/api/v1/chatbot/context"
     headers = {"Authorization": f"Bearer {token}"}
     
@@ -43,10 +37,7 @@ async def fetch_user_context(token: str) -> str:
                                 data["property_statuses"].append(status_res.json())
 
                 import json
-                result_str = json.dumps(data, ensure_ascii=False)
-                # Cache for 10 minutes
-                await cache.set(cache_key, result_str, expire=600)
-                return result_str
+                return json.dumps(data, ensure_ascii=False)
             else:
                 logger.warning(f"⚠️ Failed to fetch context from {url} - Status: {response.status_code}")
                 return ""

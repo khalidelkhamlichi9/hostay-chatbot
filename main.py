@@ -11,6 +11,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, Depends, Request, Form
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -43,6 +44,19 @@ async def lifespan(app: FastAPI):
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(lifespan=lifespan)
+
+# =========================
+# CORS SECURITY
+# =========================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://hostayapp.com", "https://m4.hostayapp.com"],
+    allow_origin_regex=r"https://.*\.hostayapp\.com", # Autorise tous les sous-domaines Hostay
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.router.redirect_slashes = False
