@@ -59,10 +59,17 @@ KNOWLEDGE_BASE = [
 ]
 
 
-def retrieve_context(query: str, max_results: int = 3) -> str:
+from cache import cache
+
+async def retrieve_context(query: str, max_results: int = 3) -> str:
     """
-    RAG: Combine hardcoded knowledge + DB chunks uploadés par admin
+    RAG: Combine hardcoded knowledge + DB chunks uploadés par admin avec Cache
     """
+    cache_key = f"legacy_rag_{query}"
+    cached = await cache.get(cache_key)
+    if cached:
+        return cached
+
     query_lower = query.lower()
     query_words = set(re.findall(r'\w+', query_lower))
 
@@ -111,4 +118,6 @@ def retrieve_context(query: str, max_results: int = 3) -> str:
     if not top:
         return ""
 
-    return "\n\n".join(content for _, content in top)
+    context = "\n\n".join(content for _, content in top)
+    await cache.set(cache_key, context, expire=3600)
+    return context

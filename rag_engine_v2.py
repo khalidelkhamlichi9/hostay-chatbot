@@ -17,6 +17,7 @@ from nltk.stem import SnowballStemmer
 
 from llm_client import call_llm
 from database import get_all_chunks
+from cache import cache
 
 # =========================
 # NLTK SETUP (safe)
@@ -176,27 +177,37 @@ class AdvancedRAGEngineV2:
     # =========================
     # GET CONTEXT
     # =========================
-    def get_context(self, query: str, top_k: int = 3) -> str:
-        """Retourne le contexte formaté pour le LLM"""
+    async def get_context(self, query: str, top_k: int = 3) -> str:
+        """Retourne le contexte formaté pour le LLM avec Cache Redis"""
+        cache_key = f"rag_context_{query}"
+        cached = await cache.get(cache_key)
+        if cached:
+            return cached
+
         results = self.search(query, top_k)
 
         if not results:
             return ""
 
-        return "\n\n".join(
+        context = "\n\n".join(
             f"[{r['chunk']['title']}] {r['chunk']['content']}"
             for r in results
         )
+        
+        await cache.set(cache_key, context, expire=3600) # Cache 1 hour
+        return context
 
     # =========================
     # QUERY (Pipeline complet)
     # =========================
-    def query(self, question: str, debug: bool = False) -> str:
+    async def query(self, question: str, debug: bool = False) -> str:
         """Pipeline complet: Cache → RAG → LLM"""
         # 1. Cache
-        if question in self.cache:
-            if debug: logger.info("⚡ Cache hit")
-            return self.cache[question]
+        cache_key = f"rag_query_{question}"
+        cached = await cache.get(cache_key)
+        if cached:
+            if debug: logger.info("⚡ Redis Cache hit")
+            return cached
 
         # 2. Preprocess query
         q = question.lower().strip()
@@ -207,7 +218,7 @@ class AdvancedRAGEngineV2:
         use_rag = not ("bonjour" in q or len(q.split()) < 3)
 
         # 4. Context
-        context = self.get_context(question) if use_rag else ""
+        context = await self.get_context(question) if use_rag else ""
 
         # 5. Prompt
         if use_rag and context:
@@ -228,7 +239,7 @@ Rules:
         response = call_llm(prompt)
 
         # 7. Cache store
-        self.cache[question] = response
+        await cache.set(cache_key, response, expire=3600)
         return response
 
     # =========================

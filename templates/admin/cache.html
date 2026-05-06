@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Gestion du Cache - Hostay Admin{% endblock %}
+{% block page_title %}Gestion du Cache (Redis){% endblock %}
+
+{% block content %}
+<div class="stats-grid">
+    <!-- Status -->
+    <div class="stat-card">
+        <div class="stat-info">
+            <h3>Status Redis</h3>
+            <div class="value">
+                <span class="badge {% if cache.status == 'Connected' %}badge-success{% else %}badge-danger{% endif %}">
+                    {{ cache.status }}
+                </span>
+            </div>
+        </div>
+        <div class="stat-icon {% if cache.status == 'Connected' %}icon-green{% else %}icon-red{% endif %}">
+            <i class="ri-database-2-line"></i>
+        </div>
+    </div>
+
+    <!-- Keys Count -->
+    <div class="stat-card">
+        <div class="stat-info">
+            <h3>Clés en Cache</h3>
+            <div class="value">{{ cache.info.key_count | default(0) }}</div>
+        </div>
+        <div class="stat-icon icon-blue">
+            <i class="ri-key-2-line"></i>
+        </div>
+    </div>
+
+    <!-- Memory -->
+    <div class="stat-card">
+        <div class="stat-info">
+            <h3>Mémoire Utilisée</h3>
+            <div class="value">{{ cache.info.memory | default('0B') }}</div>
+        </div>
+        <div class="stat-icon icon-orange">
+            <i class="ri-dashboard-3-line"></i>
+        </div>
+    </div>
+
+    <!-- Clients -->
+    <div class="stat-card">
+        <div class="stat-info">
+            <h3>Clients Connectés</h3>
+            <div class="value">{{ cache.info.clients | default(0) }}</div>
+        </div>
+        <div class="stat-icon icon-blue">
+            <i class="ri-user-received-2-line"></i>
+        </div>
+    </div>
+</div>
+
+<div class="stat-card" style="flex-direction: column; margin-top: 2rem;">
+    <div class="section-title"><i class="ri-settings-4-line"></i> Actions de Maintenance</div>
+    <div style="padding: 1.5rem; background: #fff7ed; border: 1px solid #ffedd5; border-radius: 12px; margin-bottom: 1.5rem;">
+        <h4 style="color: #9a3412; margin-bottom: 0.5rem;"><i class="ri-error-warning-line"></i> Zone de Danger</h4>
+        <p style="color: #c2410c; font-size: 0.9rem;">
+            Vider le cache supprimera instantanément toutes les données temporaires : contextes RAG, réponses LLM et sessions de contexte utilisateur. 
+            Le chatbot devra régénérer ces données lors des prochaines requêtes, ce qui peut ralentir les premières interactions.
+        </p>
+    </div>
+    
+    <div style="display: flex; gap: 1rem;">
+        <form action="/admin/cache/clear" method="POST" onsubmit="return confirm('Êtes-vous sûr de vouloir vider TOUT le cache Redis?')">
+            <button type="submit" class="btn-action btn-danger">
+                <i class="ri-delete-bin-line"></i> Vider le Cache Immédiatement
+            </button>
+        </form>
+    </div>
+</div>
+
+{% if cache.info %}
+<div class="stat-card" style="flex-direction: column; margin-top: 2rem;">
+    <div class="section-title"><i class="ri-information-line"></i> Informations Système</div>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 1rem;">
+        <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 1rem; color: var(--text-muted);">Version Redis</td>
+            <td style="padding: 1rem; font-weight: 600;">{{ cache.info.version }}</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 1rem; color: var(--text-muted);">Uptime (Temps de fonctionnement)</td>
+            <td style="padding: 1rem; font-weight: 600;">{{ cache.info.uptime }} secondes</td>
+        </tr>
+    </table>
+</div>
+{% endif %}
+
+{% endblock %}

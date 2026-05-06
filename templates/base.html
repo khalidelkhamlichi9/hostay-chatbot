@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
@@ -168,6 +168,18 @@
         .btn-primary:hover { background: var(--primary-dark); }
         .btn-outline { background: white; border: 1px solid var(--border); color: var(--text-main); }
         .btn-outline:hover { background: #f8fafc; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+
+        .badge {
+            padding: 0.25rem 0.6rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-success { background: #dcfce7; color: #16a34a; }
+        .badge-danger { background: #fee2e2; color: #dc2626; }
 
     </style>
 </head>
@@ -184,6 +196,7 @@
             <li><a href="/admin/prompts" class="{% if 'prompts' in request.url.path %}active{% endif %}"><i class="ri-settings-3-line"></i> Prompts</a></li>
             <li><a href="/admin/conversations" class="{% if 'conversations' in request.url.path %}active{% endif %}"><i class="ri-message-3-line"></i> Conversations</a></li>
             <li><a href="/admin/rag" class="{% if 'rag' in request.url.path %}active{% endif %}"><i class="ri-database-2-line"></i> RAG Chunks</a></li>
+            <li><a href="/admin/cache" class="{% if 'cache' in request.url.path %}active{% endif %}"><i class="ri-flashlight-line"></i> Cache Redis</a></li>
         </ul>
         <div class="user-profile">
             <i class="ri-user-3-line"></i>

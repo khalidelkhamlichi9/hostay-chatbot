@@ -26,6 +26,7 @@ from admin_routes import router as admin_router
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from cache import cache
 
 # Load env
 load_dotenv()
@@ -37,6 +38,7 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     database.init_db()
     logger.info("✅ Database initialized")
+    await cache.connect()
     yield
 
 limiter = Limiter(key_func=get_remote_address)
@@ -105,7 +107,6 @@ async def chat(request: Request, req: ChatRequest, user=Depends(get_current_user
 # =========================
 @app.get("/", response_class=HTMLResponse)
 async def chat_page(request: Request):
-    return templates.TemplateResponse("chat.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "chat.html", {
         "title": "Hostay Chatbot"
     })

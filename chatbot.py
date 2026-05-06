@@ -126,9 +126,9 @@ async def get_answer(message: str, role: str, session_id: str = None, token: str
     lang = detect_language(message)
     tension = classify_tension(message)
     
-    rag_context = rag_engine.get_context(message)
+    rag_context = await rag_engine.get_context(message)
     if not rag_context:
-        rag_context = retrieve_context(message)
+        rag_context = await retrieve_context(message)
         
     real_data = await fetch_user_context(token) if token else ""
 

@@ -22,20 +22,7 @@
         <div class="stat-info">
             <h3>Rôle Majoritaire</h3>
             <div class="value" style="font-size: 1.5rem;">
-                {% set roles = analytics.by_role | default({}) %}
-                {% if roles %}
-                    {% set max_role = "" %}
-                    {% set max_count = 0 %}
-                    {% for r, c in roles.items() %}
-                        {% if c > max_count %}
-                            {% set max_count = c %}
-                            {% set max_role = r %}
-                        {% endif %}
-                    {% endfor %}
-                    {{ max_role | capitalize }}
-                {% else %}
-                    -
-                {% endif %}
+                {{ top_role }}
             </div>
         </div>
         <div class="stat-icon icon-green">
@@ -61,20 +48,7 @@
         <div class="stat-info">
             <h3>Langue Top</h3>
             <div class="value" style="font-size: 1.5rem;">
-                {% set langs = analytics.by_lang | default({}) %}
-                {% if langs %}
-                    {% set max_lang = "" %}
-                    {% set max_count = 0 %}
-                    {% for l, c in langs.items() %}
-                        {% if c > max_count %}
-                            {% set max_count = c %}
-                            {% set max_lang = l %}
-                        {% endif %}
-                    {% endfor %}
-                    {{ max_lang }}
-                {% else %}
-                    -
-                {% endif %}
+                {{ top_lang }}
             </div>
         </div>
         <div class="stat-icon icon-orange">

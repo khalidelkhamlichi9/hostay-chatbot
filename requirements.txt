@@ -14,3 +14,4 @@ scikit-learn
 PyPDF2>=3.0.0
 python-docx>=0.8.11
 slowapi
+redis

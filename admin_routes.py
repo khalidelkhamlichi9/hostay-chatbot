@@ -13,6 +13,7 @@ from llm_client import translate_to_english
 import re
 from jose import jwt, JWTError
 from fastapi.responses import RedirectResponse
+from cache import cache
 
 # Télécharger les données NLTK si nécessaires
 nltk.download('punkt', quiet=True)
@@ -60,7 +61,54 @@ def clean_text(text: str) -> str:
 @router.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(request: Request, _=Depends(require_admin)):
     analytics = database.get_analytics()
-    return templates.TemplateResponse("admin/dashboard.html", {"request": request, "analytics": analytics})
+    
+    # Calculate Top Role
+    top_role = "-"
+    roles = analytics.get("by_role", {})
+    if roles:
+        top_role = max(roles, key=roles.get).capitalize()
+
+    # Calculate Top Lang
+    top_lang = "-"
+    langs = analytics.get("by_lang", {})
+    if langs:
+        top_lang = max(langs, key=langs.get)
+
+    return templates.TemplateResponse(request, "admin/dashboard.html", {
+        "analytics": analytics,
+        "top_role": top_role,
+        "top_lang": top_lang
+    })
+
+@router.get("/admin/cache", response_class=HTMLResponse)
+async def cache_manager(request: Request, _=Depends(require_admin)):
+    # Redis Info
+    redis_status = "Connected" if cache.redis else "Disconnected"
+    redis_info = {}
+    if cache.redis:
+        try:
+            info = await cache.redis.info()
+            redis_info = {
+                "version": info.get("redis_version"),
+                "memory": info.get("used_memory_human"),
+                "key_count": await cache.redis.dbsize(),
+                "uptime": info.get("uptime_in_seconds"),
+                "clients": info.get("connected_clients")
+            }
+        except:
+            redis_status = "Error"
+
+    return templates.TemplateResponse(request, "admin/cache.html", {
+        "cache": {
+            "status": redis_status,
+            "info": redis_info
+        }
+    })
+
+@router.post("/admin/cache/clear")
+async def clear_cache(_=Depends(require_admin)):
+    await cache.clear()
+    return RedirectResponse("/admin/cache", status_code=302)
 
 # ==========================================
 # ⚙️ PROMPTS
@@ -72,7 +120,7 @@ async def get_prompts(request: Request, _=Depends(require_admin)):
         "owner": database.get_prompt("owner"),
         "concierge": database.get_prompt("concierge")
     }
-    return templates.TemplateResponse("admin/prompts.html", {"request": request, "prompts": prompts})
+    return templates.TemplateResponse(request, "admin/prompts.html", {"prompts": prompts})
 
 @router.post("/admin/prompts", response_class=HTMLResponse)
 async def save_prompts(request: Request,
@@ -83,8 +131,7 @@ async def save_prompts(request: Request,
     database.save_prompt("guest", guest)
     database.save_prompt("owner", owner)
     database.save_prompt("concierge", concierge)
-    return templates.TemplateResponse("admin/prompts.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "admin/prompts.html", {
         "prompts": {"guest": guest, "owner": owner, "concierge": concierge},
         "msg": "✅ Prompts sauvegardés avec succès!"
     })
@@ -95,14 +142,13 @@ async def save_prompts(request: Request,
 @router.get("/admin/conversations", response_class=HTMLResponse)
 async def list_conversations(request: Request, _=Depends(require_admin)):
     sessions = database.get_all_sessions()
-    return templates.TemplateResponse("admin/conversations.html", {"request": request, "sessions": sessions})
+    return templates.TemplateResponse(request, "admin/conversations.html", {"sessions": sessions})
 
 @router.get("/admin/conversations/{session_id}", response_class=HTMLResponse)
 async def view_session(request: Request, session_id: str, _=Depends(require_admin)):
     session = database.get_session(session_id)
     messages = database.get_session_messages(session_id)
-    return templates.TemplateResponse("admin/session_detail.html", {
-        "request": request, 
+    return templates.TemplateResponse(request, "admin/session_detail.html", {
         "session": session, 
         "messages": messages
     })
@@ -118,9 +164,7 @@ async def edit_message(msg_id: int = Form(...), content: str = Form(...), _=Depe
     return {"status": "ok"}
 @router.get("/admin/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    return templates.TemplateResponse("admin/login.html", {
-        "request": request
-    })
+    return templates.TemplateResponse(request, "admin/login.html", {})
 
 
 @router.post("/admin/login")
@@ -143,7 +187,7 @@ async def admin_login(
 @router.get("/admin/rag", response_class=HTMLResponse)
 async def rag_manager(request: Request, _=Depends(require_admin)):
     chunks = database.get_all_chunks()
-    return templates.TemplateResponse("admin/rag.html", {"request": request, "chunks": chunks})
+    return templates.TemplateResponse(request, "admin/rag.html", {"chunks": chunks})
 
 # ✅ AJOUT MANUEL AVEC CLEAN + TRADUCTION
 @router.post("/admin/rag/add_chunk")
