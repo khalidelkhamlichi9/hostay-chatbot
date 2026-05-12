@@ -1,4 +1,4 @@
-name: Cleanup Legacy Chatbot Deployment
+name: Deploy Hostay Chatbot
 
 on:
   push:
@@ -10,10 +10,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate-and-cleanup:
+  quality-checks:
     runs-on: ubuntu-latest
-    env:
-      VPS_APP_PATH: ${{ secrets.VPS_APP_PATH }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,36 +30,135 @@ jobs:
       - name: Basic sanity check
         run: python -m compileall .
 
-      - name: Cleanup legacy VPS deployment
+  build-deploy:
+    runs-on: ubuntu-latest
+    needs: quality-checks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    outputs:
+      image-tag: ${{ steps.meta.outputs.image-tag }}
+    env:
+      VPS_APP_PORT: ${{ secrets.VPS_APP_PORT }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate image tag
+        id: meta
+        run: |
+          SHORT_SHA=${GITHUB_SHA::8}
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          IMAGE_TAG="${TIMESTAMP}-${SHORT_SHA}"
+          echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "Generated tag: ${IMAGE_TAG}"
+
+      - name: Create .env file
+        run: |
+          if [ -z "${{ secrets.ENV_FILE }}" ]; then
+            echo "ENV_FILE secret is missing."
+            exit 1
+          fi
+
+          printf '%s\n' "${{ secrets.ENV_FILE }}" > .env
+          echo "CHATBOT_DB_PATH=/app/data/hostay_chatbot.db" >> .env
+          echo "HF_HOME=/app/.cache/huggingface" >> .env
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: hostay-chatbot:${{ steps.meta.outputs.image-tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Save Docker image
+        run: |
+          docker save hostay-chatbot:${{ steps.meta.outputs.image-tag }} -o hostay-chatbot.tar
+          chmod 644 hostay-chatbot.tar
+          ls -lh hostay-chatbot.tar
+
+      - name: Copy Docker image and .env to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          source: "hostay-chatbot.tar,.env"
+          target: "/tmp/"
+          overwrite: true
+
+      - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          envs: VPS_APP_PATH
+          envs: VPS_APP_PORT,VPS_APP_PATH
           script: |
             set -e
-            APP_DIR="${VPS_APP_PATH:-$HOME/apps/khalid-chatbot}"
-            PID_FILE="$APP_DIR/.uvicorn.pid"
-            mkdir -p "$APP_DIR"
-            if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-              echo "Stopping legacy uvicorn process..."
-              kill "$(cat "$PID_FILE")" || true
+
+            export IMAGE_TAG="${{ steps.meta.outputs.image-tag }}"
+            export PORT="${VPS_APP_PORT:-8055}"
+            export CONTAINER_NAME="hostay-chatbot"
+            export IMAGE_NAME="hostay-chatbot"
+            export LEGACY_APP_DIR="${VPS_APP_PATH:-$HOME/apps/khalid-chatbot}"
+            export LEGACY_PID_FILE="${LEGACY_APP_DIR}/.uvicorn.pid"
+
+            echo "🚀 Starting chatbot deployment..."
+            echo "📦 Image Tag: $IMAGE_TAG"
+
+            if [ -f "$LEGACY_PID_FILE" ] && kill -0 "$(cat "$LEGACY_PID_FILE")" 2>/dev/null; then
+              echo "🧹 Stopping legacy chatbot process..."
+              kill "$(cat "$LEGACY_PID_FILE")" || true
               sleep 2
             fi
+            rm -f "$LEGACY_PID_FILE"
 
-            if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-              echo "Force stopping legacy uvicorn process..."
-              kill -9 "$(cat "$PID_FILE")" || true
+            docker volume create hostay_chatbot_data >/dev/null
+            docker volume create hostay_chatbot_hf_cache >/dev/null
+
+            echo "📦 Loading Docker image..."
+            docker load -i /tmp/hostay-chatbot.tar
+
+            if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+              echo "🧹 Removing existing container..."
+              docker stop ${CONTAINER_NAME} || true
+              docker rm ${CONTAINER_NAME} || true
             fi
-            rm -f "$PID_FILE"
 
-            if [ -d "$APP_DIR/.venv" ]; then
-              echo "Removing legacy virtualenv at $APP_DIR/.venv"
-              rm -rf "$APP_DIR/.venv"
-            else
-              echo "No legacy virtualenv found at $APP_DIR/.venv"
+            NETWORK_ARGS=""
+            if docker network inspect automation_default >/dev/null 2>&1; then
+              NETWORK_ARGS="--network automation_default"
             fi
 
-            echo "Cleanup completed. Persistent files like SQLite DB and logs were left untouched."
+            echo "🚀 Starting new container on port ${PORT}..."
+            docker run -d \
+              --name ${CONTAINER_NAME} \
+              --restart unless-stopped \
+              --env-file /tmp/.env \
+              -p ${PORT}:8055 \
+              -v hostay_chatbot_data:/app/data \
+              -v hostay_chatbot_hf_cache:/app/.cache/huggingface \
+              ${NETWORK_ARGS} \
+              ${IMAGE_NAME}:${IMAGE_TAG}
+
+            sleep 12
+
+            if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+              echo "❌ Container failed to stay up. Logs:"
+              docker logs ${CONTAINER_NAME} || true
+              exit 1
+            fi
+
+            echo "🧹 Cleaning up temporary files..."
+            rm -f /tmp/hostay-chatbot.tar /tmp/.env
+            docker image prune -f
+
+            echo "✅ Chatbot deployed successfully on port ${PORT}."

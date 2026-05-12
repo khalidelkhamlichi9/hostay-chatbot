@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.example
+logs/
+*.db
+hostay_chatbot.db
+DIAGNOSTIC_COMPLET.md
+MESSAGE_HANDLING_READINESS_REPORT.md
+TECHNICAL_AUDIT_SECURITY_PERFORMANCE.md

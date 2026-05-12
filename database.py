@@ -7,8 +7,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Path absolu
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hostay_chatbot.db")
+# Path absolu, surchargeable pour les déploiements Docker/VPS
+DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hostay_chatbot.db")
+DB_PATH = os.getenv("CHATBOT_DB_PATH", DEFAULT_DB_PATH)
+DB_DIR = os.path.dirname(DB_PATH)
+if DB_DIR:
+    os.makedirs(DB_DIR, exist_ok=True)
 
 
 # =========================================================
