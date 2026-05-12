@@ -78,6 +78,10 @@ jobs:
             --exclude .github \
             --exclude __pycache__ \
             --exclude .venv \
+            --exclude logs \
+            --exclude .uvicorn.pid \
+            --exclude hostay_chatbot.db \
+            --exclude '*.db' \
             . "$VPS_USER@$VPS_HOST:$APP_DIR/"
 
           rm -f ~/.ssh/deploy_key
@@ -98,6 +102,8 @@ jobs:
             PID_FILE="$APP_DIR/.uvicorn.pid"
             LOG_FILE="$APP_DIR/logs/uvicorn.log"
 
+            mkdir -p "$APP_DIR"
+            mkdir -p "$APP_DIR/logs"
             cd "$APP_DIR"
 
             if ! command -v python3 >/dev/null 2>&1; then
