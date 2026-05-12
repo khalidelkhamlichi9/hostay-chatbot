@@ -1,4 +1,4 @@
-name: Deploy Hostay Chatbot
+name: Cleanup Legacy Chatbot Deployment
 
 on:
   push:
@@ -10,11 +10,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate-and-deploy:
+  validate-and-cleanup:
     runs-on: ubuntu-latest
     env:
       VPS_APP_PATH: ${{ secrets.VPS_APP_PATH }}
-      VPS_APP_PORT: ${{ secrets.VPS_APP_PORT }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -33,109 +32,36 @@ jobs:
       - name: Basic sanity check
         run: python -m compileall .
 
-      - name: Create .env file
-        run: |
-          if [ -z "${{ secrets.ENV_FILE }}" ]; then
-            echo "ENV_FILE secret is missing."
-            exit 1
-          fi
-          printf '%s\n' "${{ secrets.ENV_FILE }}" > .env
-
-      - name: Prepare VPS directory
+      - name: Cleanup legacy VPS deployment
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          envs: VPS_APP_PATH,VPS_APP_PORT
+          envs: VPS_APP_PATH
           script: |
             set -e
             APP_DIR="${VPS_APP_PATH:-$HOME/apps/khalid-chatbot}"
-            APP_PORT="${VPS_APP_PORT:-8055}"
-
-            mkdir -p "$APP_DIR"
-            mkdir -p "$APP_DIR/logs"
-            echo "VPS ready at $APP_DIR on port $APP_PORT"
-
-      - name: Sync project to VPS
-        env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_PORT: ${{ secrets.VPS_PORT || 22 }}
-          VPS_APP_PATH: ${{ secrets.VPS_APP_PATH }}
-        run: |
-          APP_DIR="${VPS_APP_PATH:-~/apps/khalid-chatbot}"
-
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-
-          rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -p $VPS_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-            --exclude .git \
-            --exclude .github \
-            --exclude __pycache__ \
-            --exclude .venv \
-            --exclude logs \
-            --exclude .uvicorn.pid \
-            --exclude hostay_chatbot.db \
-            --exclude '*.db' \
-            . "$VPS_USER@$VPS_HOST:$APP_DIR/"
-
-          rm -f ~/.ssh/deploy_key
-
-      - name: Deploy on VPS
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || 22 }}
-          envs: VPS_APP_PATH,VPS_APP_PORT
-          script: |
-            set -e
-
-            APP_DIR="${VPS_APP_PATH:-$HOME/apps/khalid-chatbot}"
-            APP_PORT="${VPS_APP_PORT:-8055}"
             PID_FILE="$APP_DIR/.uvicorn.pid"
-            LOG_FILE="$APP_DIR/logs/uvicorn.log"
-
             mkdir -p "$APP_DIR"
-            mkdir -p "$APP_DIR/logs"
-            cd "$APP_DIR"
-
-            if ! command -v python3 >/dev/null 2>&1; then
-              echo "python3 is required on the VPS."
-              exit 1
-            fi
-
-            if [ ! -d .venv ]; then
-              python3 -m venv .venv
-            fi
-
-            . .venv/bin/activate
-            python -m pip install --upgrade pip
-            pip install -r requirements.txt
-
             if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+              echo "Stopping legacy uvicorn process..."
               kill "$(cat "$PID_FILE")" || true
               sleep 2
             fi
 
             if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+              echo "Force stopping legacy uvicorn process..."
               kill -9 "$(cat "$PID_FILE")" || true
             fi
+            rm -f "$PID_FILE"
 
-            nohup .venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port "$APP_PORT" > "$LOG_FILE" 2>&1 &
-            echo $! > "$PID_FILE"
-
-            sleep 3
-
-            if ! kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-              echo "Chatbot failed to start. Check $LOG_FILE on the VPS."
-              exit 1
+            if [ -d "$APP_DIR/.venv" ]; then
+              echo "Removing legacy virtualenv at $APP_DIR/.venv"
+              rm -rf "$APP_DIR/.venv"
+            else
+              echo "No legacy virtualenv found at $APP_DIR/.venv"
             fi
 
-            echo "Deployment finished. Chatbot is running from $APP_DIR on port $APP_PORT."
+            echo "Cleanup completed. Persistent files like SQLite DB and logs were left untouched."
