@@ -52,7 +52,7 @@ jobs:
           script: |
             set -e
             APP_DIR="${VPS_APP_PATH:-$HOME/apps/khalid-chatbot}"
-            APP_PORT="${VPS_APP_PORT:-8000}"
+            APP_PORT="${VPS_APP_PORT:-8055}"
 
             mkdir -p "$APP_DIR"
             mkdir -p "$APP_DIR/logs"
@@ -66,7 +66,7 @@ jobs:
           VPS_PORT: ${{ secrets.VPS_PORT || 22 }}
           VPS_APP_PATH: ${{ secrets.VPS_APP_PATH }}
         run: |
-          APP_DIR="${VPS_APP_PATH:-/home/$VPS_USER/apps/khalid-chatbot}"
+          APP_DIR="${VPS_APP_PATH:-~/apps/khalid-chatbot}"
 
           mkdir -p ~/.ssh
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
@@ -94,7 +94,7 @@ jobs:
             set -e
 
             APP_DIR="${VPS_APP_PATH:-$HOME/apps/khalid-chatbot}"
-            APP_PORT="${VPS_APP_PORT:-8000}"
+            APP_PORT="${VPS_APP_PORT:-8055}"
             PID_FILE="$APP_DIR/.uvicorn.pid"
             LOG_FILE="$APP_DIR/logs/uvicorn.log"
 
