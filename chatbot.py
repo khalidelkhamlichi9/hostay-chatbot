@@ -1,4 +1,4 @@
-# chatbot.py - Hostay Chatbot avec RAG + Tension + OpenRouter API + Multilangue (FIXED)
+# chatbot.py - Hostay Chatbot avec RAG + Tension + DeepSeek API + Multilangue
 import re
 import os
 import httpx
@@ -10,13 +10,14 @@ from dotenv import load_dotenv
 from cache import cache
 import database
 from database import get_prompt  # ← Import dynamique prompt
+from llm_client import (
+    DEEPSEEK_API_URL,
+    build_chat_payload,
+    get_deepseek_api_key,
+    get_deepseek_headers,
+)
 
 load_dotenv()
-
-ANTHROPIC_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-ANTHROPIC_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-CLAUDE_MODEL = "deepseek/deepseek-chat"
-
 
 def is_dangerous(text: str) -> bool:
     blacklist = [
@@ -141,7 +142,8 @@ async def get_answer(message: str, role: str, session_id: str = None, token: str
         
     real_data = await fetch_user_context(token) if token else ""
 
-    if not ANTHROPIC_API_KEY:
+    api_key = get_deepseek_api_key()
+    if not api_key:
         return {"reply": "⚠️ API key manquante.", "saved": False}
 
     system_prompt = build_system_prompt(
@@ -152,10 +154,7 @@ async def get_answer(message: str, role: str, session_id: str = None, token: str
         real_data=real_data
     )
 
-    headers = {
-        "Authorization": f"Bearer {ANTHROPIC_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    headers = get_deepseek_headers(api_key)
 
     messages_payload = [{"role": "system", "content": system_prompt}]
     
@@ -166,15 +165,15 @@ async def get_answer(message: str, role: str, session_id: str = None, token: str
             
     messages_payload.append({"role": "user", "content": message})
 
-    payload = {
-        "model": CLAUDE_MODEL,
-        "max_tokens": 1024,
-        "messages": messages_payload
-    }
+    payload = build_chat_payload(
+        messages=messages_payload,
+        max_tokens=1024,
+        temperature=0.7,
+    )
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(ANTHROPIC_API_URL, json=payload, headers=headers)
+            response = await client.post(DEEPSEEK_API_URL, json=payload, headers=headers)
 
         if response.status_code != 200:
             raise httpx.RequestError(f"API Error {response.status_code}")
