@@ -12,6 +12,9 @@ concurrency:
 jobs:
   validate-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      VPS_APP_PATH: ${{ secrets.VPS_APP_PATH }}
+      VPS_APP_PORT: ${{ secrets.VPS_APP_PORT }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -30,14 +33,103 @@ jobs:
       - name: Basic sanity check
         run: python -m compileall .
 
-      - name: Trigger deployment
-        env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      - name: Create .env file
         run: |
-          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-            echo "RENDER_DEPLOY_HOOK_URL secret is missing."
+          if [ -z "${{ secrets.ENV_FILE }}" ]; then
+            echo "ENV_FILE secret is missing."
             exit 1
           fi
+          printf '%s\n' "${{ secrets.ENV_FILE }}" > .env
 
-          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL"
-          echo "Deployment hook triggered successfully."
+      - name: Prepare VPS directory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: VPS_APP_PATH,VPS_APP_PORT
+          script: |
+            set -e
+            APP_DIR="${VPS_APP_PATH:-$HOME/apps/khalid-chatbot}"
+            APP_PORT="${VPS_APP_PORT:-8000}"
+
+            mkdir -p "$APP_DIR"
+            mkdir -p "$APP_DIR/logs"
+            echo "VPS ready at $APP_DIR on port $APP_PORT"
+
+      - name: Sync project to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_PORT: ${{ secrets.VPS_PORT || 22 }}
+          VPS_APP_PATH: ${{ secrets.VPS_APP_PATH }}
+        run: |
+          APP_DIR="${VPS_APP_PATH:-/home/$VPS_USER/apps/khalid-chatbot}"
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p $VPS_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+            --exclude .git \
+            --exclude .github \
+            --exclude __pycache__ \
+            --exclude .venv \
+            . "$VPS_USER@$VPS_HOST:$APP_DIR/"
+
+          rm -f ~/.ssh/deploy_key
+
+      - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: VPS_APP_PATH,VPS_APP_PORT
+          script: |
+            set -e
+
+            APP_DIR="${VPS_APP_PATH:-$HOME/apps/khalid-chatbot}"
+            APP_PORT="${VPS_APP_PORT:-8000}"
+            PID_FILE="$APP_DIR/.uvicorn.pid"
+            LOG_FILE="$APP_DIR/logs/uvicorn.log"
+
+            cd "$APP_DIR"
+
+            if ! command -v python3 >/dev/null 2>&1; then
+              echo "python3 is required on the VPS."
+              exit 1
+            fi
+
+            if [ ! -d .venv ]; then
+              python3 -m venv .venv
+            fi
+
+            . .venv/bin/activate
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+
+            if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+              kill "$(cat "$PID_FILE")" || true
+              sleep 2
+            fi
+
+            if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+              kill -9 "$(cat "$PID_FILE")" || true
+            fi
+
+            nohup .venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port "$APP_PORT" > "$LOG_FILE" 2>&1 &
+            echo $! > "$PID_FILE"
+
+            sleep 3
+
+            if ! kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+              echo "Chatbot failed to start. Check $LOG_FILE on the VPS."
+              exit 1
+            fi
+
+            echo "Deployment finished. Chatbot is running from $APP_DIR on port $APP_PORT."
