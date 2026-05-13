@@ -4,6 +4,8 @@ fastapi
 uvicorn
 pydantic
 PyJWT
+python-jose[cryptography]
+httpx
 python-dotenv
 requests
 jinja2
