@@ -116,10 +116,13 @@ jobs:
             sleep 12
 
             if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-              echo "✗ Container failed to start. Logs:"
-              docker logs "$CONTAINER_NAME" || true
+              echo "✗ Container failed to start. Last 60 log lines:"
+              docker logs "$CONTAINER_NAME" --tail 60 2>&1 || true
               exit 1
             fi
+
+            echo "✓ Container is running. Last 10 lines:"
+            docker logs "$CONTAINER_NAME" --tail 10 2>&1 || true
 
             rm -rf "$HOME/chatbot-deploy/"
             docker image prune -f
