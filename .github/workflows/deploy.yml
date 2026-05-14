@@ -66,7 +66,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           source: "app.tar.gz,chatbot.env"
-          target: "/tmp/"
+          target: "~/chatbot-deploy/"
           overwrite: true
 
       - name: Build and deploy on VPS
@@ -86,7 +86,7 @@ jobs:
 
             echo "→ Extracting source..."
             mkdir -p "$BUILD_DIR"
-            tar -xzf /tmp/app.tar.gz -C "$BUILD_DIR" --overwrite
+            tar -xzf "$HOME/chatbot-deploy/app.tar.gz" -C "$BUILD_DIR" --overwrite
 
             echo "→ Building Docker image (VPS layer cache active)..."
             cd "$BUILD_DIR"
@@ -106,7 +106,7 @@ jobs:
             docker run -d \
               --name "$CONTAINER_NAME" \
               --restart unless-stopped \
-              --env-file /tmp/chatbot.env \
+              --env-file "$HOME/chatbot-deploy/chatbot.env" \
               -p "${PORT}:8055" \
               -v hostay_chatbot_data:/app/data \
               $NETWORK_ARGS \
@@ -121,7 +121,7 @@ jobs:
               exit 1
             fi
 
-            rm -f /tmp/app.tar.gz /tmp/chatbot.env
+            rm -rf "$HOME/chatbot-deploy/"
             docker image prune -f
 
             echo "✓ Deployed on port ${PORT}"
