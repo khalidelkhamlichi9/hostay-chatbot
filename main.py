@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -193,6 +193,29 @@ async def chat(request: Request, req: ChatRequest, user=Depends(get_current_user
         "saved": result.get("saved", False),
         "session_id": result.get("session_id"),
     }
+
+
+@app.post("/chat-form", response_class=HTMLResponse)
+@limiter.limit("20/minute")
+async def chat_form(
+    request: Request,
+    message: str = Form(...),
+    role: str = Form("guest"),
+    session_id: Optional[str] = Form(default=None),
+):
+    result = await get_answer(message, role, session_id or None, token=None)
+    return templates.TemplateResponse(
+        request,
+        "chat.html",
+        {
+            "title": "Hostay Chatbot",
+            "message": message,
+            "reply": result["reply"],
+            "session_id": result.get("session_id"),
+            "language": result.get("language", ""),
+            "role": role,
+        },
+    )
 
 
 @app.get("/", response_class=HTMLResponse)

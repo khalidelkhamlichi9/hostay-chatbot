@@ -236,7 +236,7 @@ async def login_page(request: Request):
     return resp
 
 
-@router.post("/admin/login")
+@router.post("/admin/login", response_class=HTMLResponse)
 @limiter.limit("10/minute")
 async def admin_login(
     request: Request,
@@ -247,7 +247,22 @@ async def admin_login(
     verify_login_csrf(request, csrf_token)
     settings = get_settings()
     if username != settings.admin_user or not verify_admin_password(password, settings):
-        return {"error": "wrong credentials"}
+        new_token = new_login_csrf()
+        resp = templates.TemplateResponse(
+            request,
+            "admin/login.html",
+            {"csrf_token": new_token, "error": "Nom d'utilisateur ou mot de passe incorrect."},
+        )
+        resp.set_cookie(
+            CSRF_COOKIE_LOGIN,
+            new_token,
+            httponly=True,
+            secure=settings.cookie_secure,
+            samesite="lax",
+            max_age=600,
+            path="/admin",
+        )
+        return resp
 
     token = jwt.encode(
         {"role": "admin", "exp": datetime.now(timezone.utc) + timedelta(hours=8)},
