@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import os
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -59,7 +58,7 @@ async def require_admin(request: Request, admin_token: str | None = Cookie(defau
         if payload.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Access denied")
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid token") from None
     ensure_admin_csrf(request)
     return True
 

@@ -1,8 +1,7 @@
 import asyncio
+import logging
 import os
 import re
-from typing import List, Dict
-import logging
 
 from sklearn.metrics.pairwise import cosine_similarity
 import nltk
@@ -70,7 +69,7 @@ class AdvancedRAGEngineV2:
 
         logger.info("Added '%s' (%d chunks)", title, count)
 
-    def search(self, query: str, top_k: int = 3) -> List[Dict]:
+    def search(self, query: str, top_k: int = 3) -> list[dict]:
         if not self.embeddings:
             return []
 

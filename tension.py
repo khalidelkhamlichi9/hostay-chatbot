@@ -1,5 +1,4 @@
 # tension.py - Détection de tension/urgence
-import re
 
 URGENCY_PATTERNS = {
     "urgence_serrure": ["serrure", "bloqué", "coincé", "rentrer", "dehors", "enfermé", "clé"],

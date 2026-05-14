@@ -31,9 +31,9 @@ jobs:
         run: python -m compileall -q .
 
   # ── Deploy: ship source to VPS, build Docker there ──
-  # The VPS keeps its own Docker layer cache, so the torch/ML layer is only
-  # downloaded once (first deploy). Every subsequent deploy only rebuilds the
-  # fast app layer (~30-60 s). No 2 GB tar is ever transferred over the wire.
+  # The VPS keeps its own Docker layer cache, so the fastembed/ML layer is only
+  # built once. Every subsequent deploy only rebuilds the fast app layer (~30–60 s).
+  # No large image tar is ever transferred over the wire.
   build-deploy:
     runs-on: ubuntu-latest
     needs: quality-checks
@@ -43,19 +43,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Package source (git-tracked files only, ~50 KB)
+      # Archive into the workspace so scp-action can find it
+      - name: Package source (git-tracked files only)
         run: |
-          git archive --format=tar.gz HEAD -o /tmp/app.tar.gz
-          echo "Package size: $(du -sh /tmp/app.tar.gz | cut -f1)"
+          git archive --format=tar.gz HEAD -o app.tar.gz
+          echo "Package size: $(du -sh app.tar.gz | cut -f1)"
 
       - name: Write .env
         run: |
           if [ -z "${{ secrets.ENV_FILE }}" ]; then
             echo "ENV_FILE secret is missing." && exit 1
           fi
-          printf '%s\n' "${{ secrets.ENV_FILE }}" > /tmp/chatbot.env
-          echo "CHATBOT_DB_PATH=/app/data/hostay_chatbot.db" >> /tmp/chatbot.env
-          echo "HF_HOME=/app/.cache/huggingface" >> /tmp/chatbot.env
+          printf '%s\n' "${{ secrets.ENV_FILE }}" > chatbot.env
+          echo "CHATBOT_DB_PATH=/app/data/hostay_chatbot.db" >> chatbot.env
+          echo "FASTEMBED_CACHE_PATH=/app/.cache/fastembed" >> chatbot.env
 
       - name: Copy source + env to VPS
         uses: appleboy/scp-action@v0.1.7
@@ -64,7 +65,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          source: "/tmp/app.tar.gz,/tmp/chatbot.env"
+          source: "app.tar.gz,chatbot.env"
           target: "/tmp/"
           overwrite: true
 
@@ -108,7 +109,6 @@ jobs:
               --env-file /tmp/chatbot.env \
               -p "${PORT}:8055" \
               -v hostay_chatbot_data:/app/data \
-              -v hostay_chatbot_hf_cache:/app/.cache/huggingface \
               $NETWORK_ARGS \
               "${CONTAINER_NAME}:latest"
 

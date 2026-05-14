@@ -1,8 +1,8 @@
 name: CI
 
+# Runs on pull requests only.
+# Push to main is handled by deploy.yml (which includes its own quality check).
 on:
-  push:
-    branches: [main, master]
   pull_request:
     branches: [main, master]
 
@@ -18,8 +18,7 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
-      # requirements.txt has no torch — installs in ~2 min instead of 20+.
-      # Tests pass with SKIP_RAG_INIT=1 (set inside test_health.py already).
+      # No torch / ML deps — installs in ~2 min
       - name: Install dependencies
         run: |
           pip install --upgrade pip
