@@ -65,6 +65,10 @@
 
 {% block scripts %}
 <script>
+function getCsrf() {
+    const el = document.querySelector('meta[name="csrf-token"]');
+    return el ? (el.getAttribute('content') || '') : '';
+}
 function editMessage(id) {
     document.getElementById('msg-display-' + id).style.display = 'none';
     document.getElementById('msg-edit-' + id).style.display = 'block';
@@ -81,7 +85,7 @@ function saveMessage(id) {
     fetch('/admin/messages/edit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'msg_id=' + id + '&content=' + encodeURIComponent(content)
+        body: 'msg_id=' + id + '&content=' + encodeURIComponent(content) + '&csrf_token=' + encodeURIComponent(getCsrf())
     }).then(res => res.json())
       .then(data => {
           if(data.status === 'ok') {

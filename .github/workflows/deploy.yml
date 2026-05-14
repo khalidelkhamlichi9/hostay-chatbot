@@ -10,161 +10,118 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ── Quick sanity check — no torch, completes in ~2 min ──
   quality-checks:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
+          cache: pip
+          cache-dependency-path: requirements.txt
 
-      - name: Install dependencies
+      - name: Install app deps (no ML)
         run: |
-          python -m pip install --upgrade pip
+          pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Basic sanity check
-        run: python -m compileall .
+      - name: Syntax check
+        run: python -m compileall -q .
 
+  # ── Deploy: ship source to VPS, build Docker there ──
+  # The VPS keeps its own Docker layer cache, so the torch/ML layer is only
+  # downloaded once (first deploy). Every subsequent deploy only rebuilds the
+  # fast app layer (~30-60 s). No 2 GB tar is ever transferred over the wire.
   build-deploy:
     runs-on: ubuntu-latest
     needs: quality-checks
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    outputs:
-      image-tag: ${{ steps.meta.outputs.image-tag }}
     env:
       VPS_APP_PORT: ${{ secrets.VPS_APP_PORT }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Free disk space on runner
+      - name: Package source (git-tracked files only, ~50 KB)
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          sudo docker image prune -af
-          df -h /
+          git archive --format=tar.gz HEAD -o /tmp/app.tar.gz
+          echo "Package size: $(du -sh /tmp/app.tar.gz | cut -f1)"
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Generate image tag
-        id: meta
-        run: |
-          SHORT_SHA=${GITHUB_SHA::8}
-          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-          IMAGE_TAG="${TIMESTAMP}-${SHORT_SHA}"
-          echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-          echo "Generated tag: ${IMAGE_TAG}"
-
-      - name: Create .env file
+      - name: Write .env
         run: |
           if [ -z "${{ secrets.ENV_FILE }}" ]; then
-            echo "ENV_FILE secret is missing."
-            exit 1
+            echo "ENV_FILE secret is missing." && exit 1
           fi
+          printf '%s\n' "${{ secrets.ENV_FILE }}" > /tmp/chatbot.env
+          echo "CHATBOT_DB_PATH=/app/data/hostay_chatbot.db" >> /tmp/chatbot.env
+          echo "HF_HOME=/app/.cache/huggingface" >> /tmp/chatbot.env
 
-          printf '%s\n' "${{ secrets.ENV_FILE }}" > .env
-          echo "CHATBOT_DB_PATH=/app/data/hostay_chatbot.db" >> .env
-          echo "HF_HOME=/app/.cache/huggingface" >> .env
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64
-          load: true
-          tags: hostay-chatbot:${{ steps.meta.outputs.image-tag }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=min
-
-      - name: Save Docker image
-        run: |
-          docker save hostay-chatbot:${{ steps.meta.outputs.image-tag }} -o hostay-chatbot.tar
-          chmod 644 hostay-chatbot.tar
-          ls -lh hostay-chatbot.tar
-
-      - name: Copy Docker image and .env to VPS
+      - name: Copy source + env to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          source: "hostay-chatbot.tar,.env"
+          source: "/tmp/app.tar.gz,/tmp/chatbot.env"
           target: "/tmp/"
           overwrite: true
 
-      - name: Deploy to VPS
+      - name: Build and deploy on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          envs: VPS_APP_PORT,VPS_APP_PATH
+          envs: VPS_APP_PORT
           script: |
             set -e
 
-            export IMAGE_TAG="${{ steps.meta.outputs.image-tag }}"
-            export PORT="${VPS_APP_PORT:-8055}"
-            export CONTAINER_NAME="hostay-chatbot"
-            export IMAGE_NAME="hostay-chatbot"
-            export LEGACY_APP_DIR="${VPS_APP_PATH:-$HOME/apps/khalid-chatbot}"
-            export LEGACY_PID_FILE="${LEGACY_APP_DIR}/.uvicorn.pid"
+            PORT="${VPS_APP_PORT:-8055}"
+            CONTAINER_NAME="hostay-chatbot"
+            BUILD_DIR="$HOME/builds/hostay-chatbot"
 
-            echo "🚀 Starting chatbot deployment..."
-            echo "📦 Image Tag: $IMAGE_TAG"
+            echo "→ Extracting source..."
+            mkdir -p "$BUILD_DIR"
+            tar -xzf /tmp/app.tar.gz -C "$BUILD_DIR" --overwrite
 
-            if [ -f "$LEGACY_PID_FILE" ] && kill -0 "$(cat "$LEGACY_PID_FILE")" 2>/dev/null; then
-              echo "🧹 Stopping legacy chatbot process..."
-              kill "$(cat "$LEGACY_PID_FILE")" || true
-              sleep 2
-            fi
-            rm -f "$LEGACY_PID_FILE"
+            echo "→ Building Docker image (VPS layer cache active)..."
+            cd "$BUILD_DIR"
+            docker build -t "${CONTAINER_NAME}:latest" .
 
-            docker volume create hostay_chatbot_data >/dev/null
+            echo "→ Replacing container..."
+            docker stop "$CONTAINER_NAME" 2>/dev/null || true
+            docker rm   "$CONTAINER_NAME" 2>/dev/null || true
+
+            docker volume create hostay_chatbot_data    >/dev/null
             docker volume create hostay_chatbot_hf_cache >/dev/null
 
-            echo "📦 Loading Docker image..."
-            docker load -i /tmp/hostay-chatbot.tar
-
-            if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-              echo "🧹 Removing existing container..."
-              docker stop ${CONTAINER_NAME} || true
-              docker rm ${CONTAINER_NAME} || true
-            fi
-
             NETWORK_ARGS=""
-            if docker network inspect automation_default >/dev/null 2>&1; then
+            docker network inspect automation_default >/dev/null 2>&1 && \
               NETWORK_ARGS="--network automation_default"
-            fi
 
-            echo "🚀 Starting new container on port ${PORT}..."
             docker run -d \
-              --name ${CONTAINER_NAME} \
+              --name "$CONTAINER_NAME" \
               --restart unless-stopped \
-              --env-file /tmp/.env \
-              -p ${PORT}:8055 \
+              --env-file /tmp/chatbot.env \
+              -p "${PORT}:8055" \
               -v hostay_chatbot_data:/app/data \
               -v hostay_chatbot_hf_cache:/app/.cache/huggingface \
-              ${NETWORK_ARGS} \
-              ${IMAGE_NAME}:${IMAGE_TAG}
+              $NETWORK_ARGS \
+              "${CONTAINER_NAME}:latest"
 
+            echo "→ Waiting for container to stabilise..."
             sleep 12
 
             if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-              echo "❌ Container failed to stay up. Logs:"
-              docker logs ${CONTAINER_NAME} || true
+              echo "✗ Container failed to start. Logs:"
+              docker logs "$CONTAINER_NAME" || true
               exit 1
             fi
 
-            echo "🧹 Cleaning up temporary files..."
-            rm -f /tmp/hostay-chatbot.tar /tmp/.env
+            rm -f /tmp/app.tar.gz /tmp/chatbot.env
             docker image prune -f
 
-            echo "✅ Chatbot deployed successfully on port ${PORT}."
+            echo "✓ Deployed on port ${PORT}"

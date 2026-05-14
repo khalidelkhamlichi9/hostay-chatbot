@@ -13,6 +13,7 @@
 {% endif %}
 
 <form method="POST" style="display: flex; flex-direction: column; gap: 2rem;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     
     <!-- Guest Prompt -->
     <div style="background: white; border-radius: 16px; padding: 2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; transition: all 0.3s;" onmouseover="this.style.boxShadow='0 8px 24px rgba(59, 130, 246, 0.15)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'; this.style.transform='translateY(0)'">

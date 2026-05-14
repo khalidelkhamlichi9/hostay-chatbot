@@ -65,6 +65,7 @@
     
     <div style="display: flex; gap: 1rem;">
         <form action="/admin/cache/clear" method="POST" onsubmit="return confirm('Êtes-vous sûr de vouloir vider TOUT le cache Redis?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit" class="btn-action btn-danger">
                 <i class="ri-delete-bin-line"></i> Vider le Cache Immédiatement
             </button>

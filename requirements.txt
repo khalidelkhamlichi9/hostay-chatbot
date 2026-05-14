@@ -1,19 +1,19 @@
-# requirements.txt
-nltk
-fastapi
-uvicorn
-pydantic
-PyJWT
-python-jose[cryptography]
-httpx
-python-dotenv
-requests
-jinja2
-python-multipart
-sentence-transformers
-numpy
-scikit-learn
-PyPDF2>=3.0.0
-python-docx>=0.8.11
-slowapi
-redis
+# App dependencies — fast to install, safe for CI and dev.
+# Heavy ML deps (torch + sentence-transformers) live in requirements-ml.txt.
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+python-jose[cryptography]==3.3.0
+httpx==0.28.1
+python-dotenv==1.0.1
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
+jinja2==3.1.4
+python-multipart==0.0.19
+slowapi==0.1.9
+redis==5.2.1
+scikit-learn==1.5.2
+PyPDF2==3.0.1
+python-docx==1.1.2
+nltk==3.9.1

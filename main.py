@@ -1,95 +1,181 @@
 # main.py - Hostay Chatbot (Clean Architecture)
 
-import os
 import logging
+import os
+from typing import Optional
+
 from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s'
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-from fastapi import FastAPI, Depends, Request, Form
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
-import jwt
+from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 import database
-from auth import get_current_user
-from chatbot import get_answer
+from admin_security import CSRF_COOKIE_ADMIN
 from admin_routes import router as admin_router
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
+from auth import get_current_user
 from cache import cache
+from chatbot import get_answer
+from config import get_settings
+from rate_limit import limiter
+from rag_engine_v2 import init_rag_kb
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
-# Load env
-load_dotenv()
 
-# =========================
-# APP & INIT DB
-# =========================
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        return response
+
+
+class AttachAdminCSRFCookieMiddleware(BaseHTTPMiddleware):
+    """Sets admin CSRF cookie when require_admin created a new token."""
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if getattr(request.state, "admin_set_csrf_cookie", False):
+            s = get_settings()
+            response.set_cookie(
+                CSRF_COOKIE_ADMIN,
+                request.state.admin_csrf_token,
+                httponly=True,
+                secure=s.cookie_secure,
+                samesite="lax",
+                max_age=86400,
+                path="/admin",
+            )
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    get_settings()
     database.init_db()
-    logger.info("✅ Database initialized")
+    logger.info("Database initialized")
+    if os.getenv("SKIP_RAG_INIT", "").lower() not in ("1", "true", "yes"):
+        init_rag_kb()
+        logger.info("RAG knowledge base initialized")
+    else:
+        logger.info("SKIP_RAG_INIT set — skipping RAG KB load")
     await cache.connect()
-    yield
+    try:
+        yield
+    finally:
+        await cache.close()
+        logger.info("Shutdown complete")
 
-limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(lifespan=lifespan)
 
-# =========================
-# CORS SECURITY
-# =========================
+s = get_settings()
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url="/docs" if s.enable_openapi else None,
+    redoc_url="/redoc" if s.enable_openapi else None,
+    openapi_url="/openapi.json" if s.enable_openapi else None,
+)
+
+_origins = [
+    "https://hostayapp.com",
+    "https://m4.hostayapp.com",
+]
+if s.cors_extra_origins.strip():
+    _origins.extend([o.strip() for o in s.cors_extra_origins.split(",") if o.strip()])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://hostayapp.com", "https://m4.hostayapp.com"],
-    allow_origin_regex=r"https://.*\.hostayapp\.com", # Autorise tous les sous-domaines Hostay
+    allow_origins=_origins,
+    allow_origin_regex=r"https://.*\.hostayapp\.com",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
+
+if s.trusted_hosts.strip():
+    _hosts = [h.strip() for h in s.trusted_hosts.split(",") if h.strip()]
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_hosts)
+
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(AttachAdminCSRFCookieMiddleware)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.router.redirect_slashes = False
 
-# Templates & Static
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Secret
-SECRET = os.getenv("JWT_SECRET")
-if not SECRET:
-    raise RuntimeError("Missing JWT_SECRET — server cannot start")
 
-
-from typing import Optional
-
-# =========================
-# MODELS
-# =========================
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., min_length=1, max_length=2000)
     session_id: Optional[str] = None
 
 
-# =========================
-# ADMIN ROUTER
-# =========================
 app.include_router(admin_router)
 
 
-# =========================
-# FAVICON
-# =========================
+@app.get("/live", include_in_schema=False)
+async def live():
+    return JSONResponse({"status": "live"})
+
+
+@app.get("/health", include_in_schema=False)
+@app.get("/ready", include_in_schema=False)
+async def health():
+    db_ok = False
+    try:
+        conn = database.connect_db(timeout=2.0)
+        conn.execute("SELECT 1")
+        conn.close()
+        db_ok = True
+    except Exception as e:
+        logger.warning("health: database check failed: %s", e)
+
+    redis_ok = False
+    if cache.redis is not None:
+        try:
+            await cache.redis.ping()
+            redis_ok = True
+        except Exception as e:
+            logger.warning("health: redis ping failed: %s", e)
+
+    if not db_ok:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "database": False,
+                "redis": redis_ok,
+            },
+        )
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "ok",
+            "database": True,
+            "redis": redis_ok,
+        },
+    )
+
+
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     return RedirectResponse(
@@ -97,30 +183,22 @@ async def favicon():
     )
 
 
-# =========================
-# MAIN CHAT API (JWT PROTECTED)
-# =========================
 @app.post("/chat")
 @limiter.limit("20/minute")
 async def chat(request: Request, req: ChatRequest, user=Depends(get_current_user)):
-    """
-    Secure chatbot endpoint with JWT user context
-    """
     result = await get_answer(req.message, user["role"], req.session_id, user.get("token"))
-
     return {
         "user": user,
         "reply": result["reply"],
         "saved": result.get("saved", False),
-        "session_id": result.get("session_id")
+        "session_id": result.get("session_id"),
     }
 
 
-# =========================
-# FRONTEND PAGE
-# =========================
 @app.get("/", response_class=HTMLResponse)
 async def chat_page(request: Request):
-    return templates.TemplateResponse(request, "chat.html", {
-        "title": "Hostay Chatbot"
-    })
+    return templates.TemplateResponse(
+        request,
+        "chat.html",
+        {"title": "Hostay Chatbot"},
+    )

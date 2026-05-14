@@ -1,1 +1,43 @@
+# Secrets & env
 .env
+.env.*
+!.env.example
+
+# SQLite databases (may contain real user data)
+*.db
+*.sqlite
+*.sqlite3
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Test & tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ML model & HuggingFace cache (large, regenerated on deploy)
+.cache/
+*.cache/
+
+# IDE settings
+.vscode/
+.idea/
+*.iml
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Build / dist
+dist/
+build/
+*.egg-info/

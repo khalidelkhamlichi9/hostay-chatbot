@@ -56,7 +56,7 @@ Query:
 
     try:
         return json.loads(raw)
-    except:
+    except json.JSONDecodeError:
         return {
             "action": "RAG",
             "needs_translation": True,

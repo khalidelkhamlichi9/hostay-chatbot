@@ -53,6 +53,7 @@ button:hover { background: #3f52ff; transform: scale(1.03); }
 <div class="card">
     <h2>🔐 Admin Chatbot Panel</h2>
     <form method="post" action="/admin/login">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="text" name="username" placeholder="Username" required>
         <input type="password" name="password" placeholder="Password" required>
         <button type="submit">Login</button>

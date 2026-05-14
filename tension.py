@@ -1,7 +1,7 @@
 # tension.py - Détection de tension/urgence
 import re
 
-URGENCY_PATTERNSS = {
+URGENCY_PATTERNS = {
     "urgence_serrure": ["serrure", "bloqué", "coincé", "rentrer", "dehors", "enfermé", "clé"],
     "urgence_eau": ["fuite", "inondation", "eau", "dégât", "dégats des eaux", "robinet"],
     "urgence_electricité": ["coupure", "électricité", "courant", "disjoncteur", "fuse"],
@@ -24,7 +24,7 @@ def classify_tension(message: str) -> dict:
         "response_prefix": ""
     }
     
-    for urgency_type, keywords in URGENCY_PATTERNSS.items():
+    for urgency_type, keywords in URGENCY_PATTERNS.items():
         if any(keyword in message_lower for keyword in keywords):
             detected["level"] = "Urgence"
             detected["type"] = urgency_type.replace("urgence_", "")

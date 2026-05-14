@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # requirements.txt has no torch — installs in ~2 min instead of 20+.
+      # Tests pass with SKIP_RAG_INIT=1 (set inside test_health.py already).
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Tests
+        run: pytest -q
+
+      - name: pip-audit
+        continue-on-error: true
+        run: pip-audit -r requirements.txt

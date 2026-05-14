@@ -28,6 +28,7 @@
             </div>
         </div>
         <form id="uploadForm" action="/admin/rag/upload" method="POST" enctype="multipart/form-data" onsubmit="return false;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div style="margin-bottom: 1rem;">
                 <label for="fileInput" style="display: block; color: #475569; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">Sélectionner un fichier</label>
                 <input type="file" id="fileInput" name="file" accept=".txt,.md,.pdf,.doc,.docx"
@@ -53,6 +54,7 @@
             </div>
         </div>
         <form id="manualForm" action="/admin/rag/add_chunk" method="POST" onsubmit="return false;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div style="margin-bottom: 1rem;">
                 <label style="display: block; color: #475569; font-weight: 500; margin-bottom: 0.5rem; font-size: 0.9rem;">Titre du chunk</label>
                 <input name="title" placeholder="Ex: Politique d'annulation" required
@@ -167,6 +169,10 @@
 
 {% block scripts %}
 <script>
+function getCsrf() {
+    const el = document.querySelector('meta[name="csrf-token"]');
+    return el ? (el.getAttribute('content') || '') : '';
+}
 const fileInput   = document.getElementById('fileInput');
 const uploadBtn   = document.getElementById('uploadBtn');
 const fileName    = document.getElementById('fileName');
@@ -240,7 +246,7 @@ function deleteChunk(id) {
         fetch("/admin/rag/delete_chunk", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: "cid=" + id
+            body: "cid=" + encodeURIComponent(id) + "&csrf_token=" + encodeURIComponent(getCsrf())
         })
         .then(res => {
             if (res.ok) location.reload();
@@ -274,7 +280,7 @@ async function saveChunk(id) {
     btn.disabled = true;
 
     try {
-        const body = new URLSearchParams({ cid: id, title, content, tags });
+        const body = new URLSearchParams({ cid: String(id), title, content, tags, csrf_token: getCsrf() });
         const res = await fetch('/admin/rag/edit_chunk', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

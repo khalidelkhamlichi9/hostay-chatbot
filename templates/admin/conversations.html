@@ -93,12 +93,16 @@
 
 {% block scripts %}
 <script>
+function getCsrf() {
+    const el = document.querySelector('meta[name="csrf-token"]');
+    return el ? (el.getAttribute('content') || '') : '';
+}
 function deleteSession(id) {
     if(confirm('Êtes-vous sûr de vouloir supprimer cette session et tous ses messages ?')) {
         fetch('/admin/conversations/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'session_id=' + encodeURIComponent(id)
+            body: 'session_id=' + encodeURIComponent(id) + '&csrf_token=' + encodeURIComponent(getCsrf())
         }).then(() => location.reload());
     }
 }

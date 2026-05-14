@@ -1,35 +1,23 @@
-# rag_engine_v2.py - Advanced RAG Engine V2 (FIXED + DB Sync + Full Preprocessing)
-
-import numpy as np
-import string
+import asyncio
+import os
 import re
 from typing import List, Dict
 import logging
 
-logger = logging.getLogger(__name__)
-
 from sklearn.metrics.pairwise import cosine_similarity
-
 import nltk
-from nltk.tokenize import sent_tokenize, word_tokenize
-from nltk.corpus import stopwords
-from nltk.stem import SnowballStemmer
+from nltk.tokenize import sent_tokenize
 
-from llm_client import call_llm
+from llm_client import call_llm_async
 from database import get_all_chunks
 from cache import cache
 
-# =========================
-# NLTK SETUP (safe)
-# =========================
+logger = logging.getLogger(__name__)
+
 nltk.download('punkt', quiet=True)
 nltk.download('punkt_tab', quiet=True)
-nltk.download('stopwords', quiet=True)
-nltk.download('wordnet', quiet=True)
 
-# =========================
-# RAG ENGINE CLASS
-# =========================
+
 class AdvancedRAGEngineV2:
 
     def __init__(self):
@@ -38,154 +26,71 @@ class AdvancedRAGEngineV2:
         self.cache = {}
         self._model = None
 
-        # Stop words (FR + EN + punctuation)
-        self.stop_words = set(stopwords.words("english"))
-        self.stop_words.update(stopwords.words("french"))
-        self.stop_words.update(string.punctuation)
-
-        # Stemmers
-        self.stemmer_fr = SnowballStemmer("french")
-        self.stemmer_en = SnowballStemmer("english")
-
     @property
     def model(self):
         if self._model is None:
-            logger.info("⏳ Lazy loading embedding model...")
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-            logger.info("✅ Model loaded!")
+            logger.info("Loading embedding model (fastembed)...")
+            from fastembed import TextEmbedding
+            self._model = TextEmbedding(
+                model_name='sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
+                cache_dir=os.getenv('FASTEMBED_CACHE_PATH', '/app/.cache/fastembed'),
+            )
+            logger.info("Embedding model ready.")
         return self._model
 
-    # =========================
-    # 1. TEXT CLEANING
-    # =========================
     def clean_text(self, text: str) -> str:
-        """Nettoyage du texte brut"""
-        # Lowercase
         text = text.lower()
-        # Supprime URLs
         text = re.sub(r'http\S+|www\S+', '', text)
-        # Supprime emails
         text = re.sub(r'\S+@\S+', '', text)
-        # Supprime chiffres isolés
-        text = re.sub(r'\b\d+\b', '', text)
-        # Supprime caractères spéciaux sauf ponctuation utile
         text = re.sub(r'[^\w\s\.\!\?\,\;\:\-]', '', text)
-        # Supprime espaces multiples
         text = re.sub(r'\s+', ' ', text).strip()
         return text
 
-    # =========================
-    # 2. TOKENIZATION
-    # =========================
-    def tokenize(self, text: str) -> List[str]:
-        """Word tokenization"""
-        return word_tokenize(text, language='french')
-
-    # =========================
-    # 3. STOP WORD REMOVAL
-    # =========================
-    def remove_stopwords(self, tokens: List[str]) -> List[str]:
-        """Supprime les stop words"""
-        return [t for t in tokens if t.lower() not in self.stop_words and len(t) > 1]
-
-    # =========================
-    # 4. STEMMING
-    # =========================
-    def stem(self, tokens: List[str], lang: str = "french") -> List[str]:
-        """Stemming des tokens"""
-        stemmer = self.stemmer_fr if lang == "french" else self.stemmer_en
-        return [stemmer.stem(t) for t in tokens]
-
-    # =========================
-    # PIPELINE COMPLET PREPROCESSING
-    # =========================
-    def preprocess(self, text: str) -> str:
-        """Pipeline: Clean → Tokenize → StopWords → Stem → rejoin"""
-        cleaned    = self.clean_text(text)
-        tokens     = self.tokenize(cleaned)
-        tokens     = self.remove_stopwords(tokens)
-        tokens     = self.stem(tokens)
-        return " ".join(tokens)
-
-    # =========================
-    # ADD DOCUMENT
-    # =========================
     def add_document(self, doc_id: str, title: str, content: str, tags=None):
-        """Ajoute un document et génère ses embeddings"""
         if tags is None:
             tags = []
         elif isinstance(tags, str):
             tags = [t.strip() for t in tags.split(",") if t.strip()]
 
-        # Sentence tokenization (sur texte original — pas preprocessé)
         sentences = sent_tokenize(content)
-
+        count = 0
         for i, sent in enumerate(sentences):
-            if len(sent.strip()) < 5:
+            text = sent.strip()
+            if len(text) < 5:
                 continue
-
-            # Texte original pour affichage
-            original = sent.strip()
-            # Texte preprocessé pour embedding
-            preprocessed = self.preprocess(original)
-
-            chunk = {
+            self.chunks.append({
                 "id": f"{doc_id}_{i}",
                 "title": title,
-                "content": original,        # ← original pour LLM
-                "preprocessed": preprocessed,  # ← preprocessé pour debug
-                "tags": tags
-            }
+                "content": text,
+                "tags": tags,
+            })
+            # fastembed.embed() returns a generator — pull the single vector out
+            self.embeddings.append(next(self.model.embed([text])))
+            count += 1
 
-            self.chunks.append(chunk)
-            # Embedding sur texte original (SentenceTransformer gère mieux l'original)
-            self.embeddings.append(self.model.encode(original))
+        logger.info("Added '%s' (%d chunks)", title, count)
 
-        logger.info(f"✅ Added: {title} ({len(sentences)} chunks)")
-
-    # =========================
-    # SEARCH
-    # =========================
     def search(self, query: str, top_k: int = 3) -> List[Dict]:
-        """Recherche vectorielle par similarité cosinus"""
-        if len(self.embeddings) == 0:
+        if not self.embeddings:
             return []
 
-        # Preprocessing sur la query aussi
-        query_clean = self.clean_text(query)
-        query_emb   = self.model.encode(query_clean)
-
+        query_emb = next(self.model.embed([self.clean_text(query)]))
         scores = cosine_similarity([query_emb], self.embeddings)[0]
 
-        ranked = sorted(
-            enumerate(scores),
-            key=lambda x: x[1],
-            reverse=True
-        )
+        return [
+            {"chunk": self.chunks[idx], "score": float(score)}
+            for idx, score in sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:top_k]
+            if score > 0.2
+        ]
 
-        results = []
-        for idx, score in ranked[:top_k]:
-            if score > 0.2:
-                results.append({
-                    "chunk": self.chunks[idx],
-                    "score": float(score)
-                })
-
-        return results
-
-    # =========================
-    # GET CONTEXT
-    # =========================
     async def get_context(self, query: str, top_k: int = 3) -> str:
-        """Retourne le contexte formaté pour le LLM avec Cache Redis"""
         cache_key = f"rag_context_{query}"
         cached = await cache.get(cache_key)
         if cached:
             return cached
 
-        results = self.search(query, top_k)
-
+        # model.embed() runs ONNX inference — keep off the event loop
+        results = await asyncio.to_thread(self.search, query, top_k)
         if not results:
             return ""
 
@@ -193,94 +98,69 @@ class AdvancedRAGEngineV2:
             f"[{r['chunk']['title']}] {r['chunk']['content']}"
             for r in results
         )
-        
-        await cache.set(cache_key, context, expire=3600) # Cache 1 hour
+        await cache.set(cache_key, context, expire=3600)
         return context
 
-    # =========================
-    # QUERY (Pipeline complet)
-    # =========================
-    async def query(self, question: str, debug: bool = False) -> str:
-        """Pipeline complet: Cache → RAG → LLM"""
-        # 1. Cache
+    async def query(self, question: str) -> str:
+        """Standalone RAG query (not used by main chat flow)."""
         cache_key = f"rag_query_{question}"
         cached = await cache.get(cache_key)
         if cached:
-            if debug: logger.info("⚡ Redis Cache hit")
             return cached
 
-        # 2. Preprocess query
-        q = question.lower().strip()
-        faq_signals = ["what is", "c'est quoi", "comment", "how", "prix", "chno"]
-        is_faq = any(s in q for s in faq_signals)
-
-        # 3. Routing
-        use_rag = not ("bonjour" in q or len(q.split()) < 3)
-
-        # 4. Context
-        context = await self.get_context(question) if use_rag else ""
-
-        # 5. Prompt
-        if use_rag and context:
-            prompt = f"""You are a precise AI assistant. Use ONLY the context below:
+        context = await self.get_context(question)
+        if context:
+            prompt = f"""You are a precise assistant. Use ONLY the context below.
 
 {context}
 
 Question: {question}
 
 Rules:
-- Answer only using context
+- Answer only from the context
 - If missing, say "I don't know"
 - Be concise"""
         else:
-            prompt = f"You are a helpful assistant. Question: {question}\nAnswer concisely."
+            prompt = f"You are a helpful assistant. Answer concisely.\n\nQuestion: {question}"
 
-        # 6. LLM Call
-        response = call_llm(prompt)
-
-        # 7. Cache store
+        response = await call_llm_async(prompt)
         await cache.set(cache_key, response, expire=3600)
         return response
 
-    # =========================
-    # LOAD FROM DB
-    # =========================
     def load_from_database(self):
-        """Charge tous les chunks depuis la DB SQLite"""
         chunks = get_all_chunks()
         for chunk in chunks:
             self.add_document(
                 doc_id=chunk["doc_id"],
-                title=chunk["title"],
+                title=chunk["title"] or "",
                 content=chunk["content"],
-                tags=chunk.get("tags", "")
+                tags=chunk.get("tags", ""),
             )
-        logger.info(f"✅ Loaded {len(chunks)} chunks from database")
+        logger.info("Loaded %d chunks from database", len(chunks))
 
 
-# =========================
-# INSTANCE GLOBALE
-# =========================
 rag_engine = AdvancedRAGEngineV2()
 
 
-# =========================
-# INITIALISATION
-# =========================
 def init_kb():
-    """Initialise la KB avec docs hardcoded + DB"""
-
-    # 1️⃣ Docs hardcoded (fallback si DB vide)
     rag_engine.add_document("checkin", "Check-in Digital",
         "Le check-in se fait via code SMS envoyé avant arrivée.")
     rag_engine.add_document("reservation", "Réservation",
         "Les réservations sont faites en ligne avec paiement sécurisé.")
     rag_engine.add_document("urgence", "Urgence",
         "Contactez le concierge en cas de problème urgent.")
-
-    # 2️⃣ Charge les chunks depuis la DB (admin panel)
     rag_engine.load_from_database()
 
 
-# 🔥 Appel d'initialisation
-init_kb()
+def init_rag_kb() -> None:
+    """Load hardcoded KB + SQLite chunks (called once from app lifespan)."""
+    init_kb()
+
+
+def reload_rag_kb() -> None:
+    """Clear in-memory state and reload from scratch (called after admin KB mutations)."""
+    rag_engine.chunks.clear()
+    rag_engine.embeddings.clear()
+    rag_engine.cache.clear()
+    init_kb()
+    logger.info("RAG engine reloaded from DB")
