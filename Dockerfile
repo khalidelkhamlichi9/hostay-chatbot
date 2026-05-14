@@ -29,12 +29,10 @@ list(TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
 cache_dir='/app/.cache/fastembed').embed(['warmup'])); \
 print('fastembed model ready')"
 
-# NLTK sentence tokeniser (small, stays in this layer)
-RUN python -m nltk.downloader -d /usr/local/share/nltk_data punkt punkt_tab
-
 # ── Layer 2: App deps (fast — only rebuilds when requirements.txt changes) ──
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt && \
+    python -m nltk.downloader -d /usr/local/share/nltk_data punkt punkt_tab
 
 # ── Layer 3: Source code ──
 COPY . .
