@@ -219,19 +219,9 @@ async def edit_message(
 
 @router.get("/admin/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    settings = get_settings()
     token = new_login_csrf()
     resp = templates.TemplateResponse(
         request, "admin/login.html", {"csrf_token": token}
-    )
-    resp.set_cookie(
-        CSRF_COOKIE_LOGIN,
-        token,
-        httponly=True,
-        secure=settings.cookie_secure,
-        samesite="lax",
-        max_age=600,
-        path="/admin",
     )
     return resp
 
@@ -252,15 +242,6 @@ async def admin_login(
             request,
             "admin/login.html",
             {"csrf_token": new_token, "error": "Nom d'utilisateur ou mot de passe incorrect."},
-        )
-        resp.set_cookie(
-            CSRF_COOKIE_LOGIN,
-            new_token,
-            httponly=True,
-            secure=settings.cookie_secure,
-            samesite="lax",
-            max_age=600,
-            path="/admin",
         )
         return resp
 
