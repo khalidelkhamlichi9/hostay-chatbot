@@ -67,17 +67,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _production_rules(self) -> "Settings":
-        env = self.environment.lower()
-        is_prod = env in ("production", "prod")
+        is_prod = self.environment.lower() in ("production", "prod")
         if is_prod and len(self.jwt_secret) < 24:
             raise ValueError("JWT_SECRET must be at least 24 characters in production")
         if not self.admin_pass_hash and not self.admin_pass:
-            raise ValueError("Set ADMIN_PASS_HASH (bcrypt) or ADMIN_PASS (development only)")
-        if is_prod and not self.admin_pass_hash:
-            raise ValueError(
-                "Production requires ADMIN_PASS_HASH (bcrypt). "
-                "Generate a hash in Python: from passlib.hash import bcrypt; print(bcrypt.hash('YOUR_PASSWORD'))"
-            )
+            raise ValueError("Set ADMIN_PASS or ADMIN_PASS_HASH in your env file")
         return self
 
     def is_production(self) -> bool:
