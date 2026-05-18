@@ -1,9 +1,49 @@
 """Centralised settings (validated at startup)."""
 
+import logging
+import os
+import secrets
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+_JWT_SECRET_FILENAME = ".jwt_secret"
+
+
+def _jwt_secret_data_dir(chatbot_db_path: str | None) -> Path:
+    if chatbot_db_path:
+        return Path(chatbot_db_path).resolve().parent
+    default_db = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hostay_chatbot.db")
+    return Path(default_db).resolve().parent
+
+
+def _resolve_jwt_secret(raw: str, data_dir: Path) -> str:
+    if raw and raw.strip():
+        return raw.strip()
+
+    secret_file = data_dir / _JWT_SECRET_FILENAME
+    if secret_file.is_file():
+        stored = secret_file.read_text(encoding="utf-8").strip()
+        if len(stored) >= 24:
+            return stored
+
+    generated = secrets.token_urlsafe(32)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    secret_file.write_text(generated, encoding="utf-8")
+    try:
+        secret_file.chmod(0o600)
+    except OSError:
+        pass
+    logger.warning(
+        "JWT_SECRET is empty; generated a persistent secret at %s. "
+        "Set JWT_SECRET in your env file to use your own value.",
+        secret_file,
+    )
+    return generated
 
 
 class Settings(BaseSettings):
@@ -16,7 +56,7 @@ class Settings(BaseSettings):
 
     environment: str = Field(default="production", alias="ENVIRONMENT")
 
-    jwt_secret: str = Field(..., alias="JWT_SECRET")
+    jwt_secret: str = Field(default="", alias="JWT_SECRET")
     jwt_issuer: str | None = Field(default=None, alias="JWT_ISSUER")
     jwt_audience: str | None = Field(default=None, alias="JWT_AUDIENCE")
 
@@ -58,15 +98,12 @@ class Settings(BaseSettings):
             return False
         return str(v).lower() in ("1", "true", "yes", "on")
 
-    @field_validator("jwt_secret")
-    @classmethod
-    def _jwt_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("JWT_SECRET is required")
-        return v
-
     @model_validator(mode="after")
     def _production_rules(self) -> "Settings":
+        data_dir = _jwt_secret_data_dir(self.chatbot_db_path)
+        resolved = _resolve_jwt_secret(self.jwt_secret, data_dir)
+        object.__setattr__(self, "jwt_secret", resolved)
+
         is_prod = self.environment.lower() in ("production", "prod")
         if is_prod and len(self.jwt_secret) < 24:
             raise ValueError("JWT_SECRET must be at least 24 characters in production")
