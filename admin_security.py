@@ -17,15 +17,19 @@ CSRF_COOKIE_ADMIN = "admin_csrf"
 CSRF_COOKIE_LOGIN = "login_csrf"  # kept for reference / cookie deletion only
 
 
+def _is_bcrypt_hash(value: str) -> bool:
+    return value.startswith(("$2a$", "$2b$", "$2y$"))
+
+
 def verify_admin_password(plain: str, settings: Optional[Settings] = None) -> bool:
     settings = settings or get_settings()
-    if settings.admin_pass_hash:
+    if settings.admin_pass:
+        return secrets.compare_digest(plain.encode("utf-8"), settings.admin_pass.encode("utf-8"))
+    if settings.admin_pass_hash and _is_bcrypt_hash(settings.admin_pass_hash):
         try:
             return _pwd.verify(plain, settings.admin_pass_hash)
         except (ValueError, TypeError):
             return False
-    if settings.admin_pass:
-        return secrets.compare_digest(plain.encode("utf-8"), settings.admin_pass.encode("utf-8"))
     return False
 
 

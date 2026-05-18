@@ -98,6 +98,15 @@ class Settings(BaseSettings):
             return False
         return str(v).lower() in ("1", "true", "yes", "on")
 
+    @field_validator("admin_pass", "admin_pass_hash", mode="before")
+    @classmethod
+    def _empty_str_to_none(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
+
     @model_validator(mode="after")
     def _production_rules(self) -> "Settings":
         data_dir = _jwt_secret_data_dir(self.chatbot_db_path)
@@ -107,8 +116,8 @@ class Settings(BaseSettings):
         is_prod = self.environment.lower() in ("production", "prod")
         if is_prod and len(self.jwt_secret) < 24:
             raise ValueError("JWT_SECRET must be at least 24 characters in production")
-        if not self.admin_pass_hash and not self.admin_pass:
-            raise ValueError("Set ADMIN_PASS or ADMIN_PASS_HASH in your env file")
+        if not self.admin_pass:
+            raise ValueError("Set ADMIN_PASS in your env file")
         return self
 
     def is_production(self) -> bool:
