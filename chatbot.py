@@ -37,6 +37,7 @@ def is_dangerous(text: str) -> bool:
 def detect_language(text: str) -> str:
     text_lower = text.lower()
     darija_words = [
+        "salam", "labas", "ahlan", "marhaba",
         "wash", "kifash", "fin", "mnin", "chno", "3ndek", "bghit", "wach",
         "nta", "ana", "dyal", "bach", "ndir", "khasni", "3endi", "3endek",
         "bghiti", "wnti", "nti", "kifach", "chhal", "ch7al", "bch7al",
@@ -44,9 +45,9 @@ def detect_language(text: str) -> str:
         "fik", "ghadi", "daba", "dakchi", "walo", "mzyan", "mezyan",
         "3nd", "3ndi", "3ndk", "3ndna", "3ndhom"
     ]
-    french_words = ["bonjour", "comment", "quoi", "merci", "pourquoi", "est-ce", "je", "vous", "pas", "une"]
-    english_words = ["hello", "what", "how", "why", "who", "where", "when", "please", "can you", "i need"]
-    arabic_words = ["كيف", "يمكنني", "أريد", "حجز", "هل", "ما", "من", "أين", "متى", "كيفية"]
+    french_words = ["bonjour", "salut", "coucou", "comment", "quoi", "merci", "pourquoi", "est-ce", "je", "vous", "pas", "une"]
+    english_words = ["hello", "hi", "hey", "what", "how", "why", "who", "where", "when", "please", "can you", "i need"]
+    arabic_words = ["سلام", "مرحبا", "أهلا", "كيف", "يمكنني", "أريد", "حجز", "هل", "ما", "من", "أين", "متى", "كيفية"]
 
     if any(word in text_lower for word in darija_words):
         return "Moroccan Darija"
